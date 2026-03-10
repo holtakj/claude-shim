@@ -1,0 +1,84 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.11.5'
+}
+
+@org.gradle.work.DisableCachingByDefault(because = 'Repairs provisioned toolchain launchers outside the build directory')
+abstract class RepairProvisionedNativeImageLaunchers extends org.gradle.api.DefaultTask {
+    @org.gradle.api.tasks.Input
+    abstract org.gradle.api.provider.Property<String> getJavaHomePath()
+
+    @org.gradle.api.tasks.Input
+    abstract org.gradle.api.provider.Property<String> getOperatingSystemName()
+
+    @org.gradle.api.tasks.TaskAction
+    void repair() {
+        if (operatingSystemName.get().toLowerCase().contains('windows')) {
+            return
+        }
+
+        def javaHome = new File(javaHomePath.get())
+        def launcherTargets = [
+            'native-image'          : new File(javaHome, 'lib/svm/bin/native-image'),
+            'native-image-configure': new File(javaHome, 'lib/svm/bin/native-image-configure')
+        ]
+        for (entry in launcherTargets.entrySet()) {
+            def launcherName = entry.key
+            def targetFile = entry.value
+            def launcherFile = new File(javaHome, "bin/${launcherName}")
+            if (targetFile.exists() && targetFile.canExecute() && (!launcherFile.exists() || launcherFile.length() == 0 || !launcherFile.canExecute())) {
+                launcherFile.text = "#!/usr/bin/env sh\nexec \"${targetFile.absolutePath}\" \"\$@\"\n"
+                launcherFile.setExecutable(true, false)
+            }
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.yaml:snakeyaml:2.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+application {
+    mainClass = 'com.example.claudeshim.ClaudeShim'
+}
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = "claude"
+            javaLauncher = javaToolchains.launcherFor { spec ->
+                spec.languageVersion = JavaLanguageVersion.of(25)
+                spec.vendor = JvmVendorSpec.GRAAL_VM
+                spec.nativeImageCapable = true
+            }
+        }
+    }
+}
+
+def repairProvisionedNativeImageLaunchers = tasks.register('repairProvisionedNativeImageLaunchers', RepairProvisionedNativeImageLaunchers) {
+    javaHomePath.set(graalvmNative.binaries.main.javaLauncher.map { launcher ->
+        launcher.metadata.installationPath.asFile.absolutePath
+    })
+    operatingSystemName.set(providers.systemProperty('os.name').orElse(''))
+}
+
+tasks.named('nativeCompile') {
+    dependsOn(repairProvisionedNativeImageLaunchers)
+}
