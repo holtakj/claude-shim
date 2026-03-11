@@ -16,14 +16,12 @@ class MainConfigTest {
                 http_proxy=http://proxy.example:8080
                 no_proxy=localhost,127.0.0.1
                 disable_telemetry=yes
-                log_file=~/.claude-shim.log
                 """);
 
         assertEquals("http://proxy.example:8443", config.https_proxy);
         assertEquals("http://proxy.example:8080", config.http_proxy);
         assertEquals("localhost,127.0.0.1", config.no_proxy);
         assertEquals(Boolean.TRUE, config.disable_telemetry);
-        assertEquals("~/.claude-shim.log", config.log_file);
     }
 
     @Test
@@ -45,7 +43,6 @@ class MainConfigTest {
         assertNull(config.http_proxy);
         assertNull(config.no_proxy);
         assertNull(config.disable_telemetry);
-        assertNull(config.log_file);
     }
 
     @Test
@@ -64,4 +61,3 @@ class MainConfigTest {
         assertEquals(Boolean.TRUE, config.disable_telemetry);
     }
 }
-

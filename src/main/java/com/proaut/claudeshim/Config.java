@@ -6,7 +6,6 @@ public class Config {
     public String http_proxy;
     public String no_proxy;
     public Boolean disable_telemetry;
-    public String log_file;
 
     @Override
     public String toString() {
@@ -15,7 +14,6 @@ public class Config {
                 ", http_proxy='" + http_proxy + '\'' +
                 ", no_proxy='" + no_proxy + '\'' +
                 ", disable_telemetry=" + disable_telemetry +
-                ", log_file='" + log_file + '\'' +
                 '}';
     }
 }

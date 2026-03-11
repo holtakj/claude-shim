@@ -23,13 +23,6 @@ The compiled binary is written to:
 build/native/nativeCompile/claude
 ```
 
-If your environment cannot auto-download GraalVM, you can point the build to an existing GraalVM installation:
-
-```bash
-export GRAALVM_HOME=/path/to/graalvm
-./gradlew nativeCompile
-```
-
 ## 2. Put the compiled shim first on `PATH`
 
 The shim works by being found before the real Claude CLI. When you run `claude`, the shim starts first, then it searches the rest of `PATH` for the next `claude` executable and forwards the call to it.
@@ -82,14 +75,6 @@ or your copied location such as:
 ~/.local/bin/claude
 ```
 
-You can also run the shim in debug mode:
-
-```bash
-claude --shim-debug
-```
-
-This prints the shim banner and the detected downstream Claude binary.
-
 ## 4. Optional configuration
 
 If you want proxy or telemetry settings, create:
@@ -103,7 +88,6 @@ Example:
 ```properties
 https_proxy=http://127.0.0.1:8080
 disable_telemetry=true
-log_file=~/.claude-shim.log
 ```
 
 ## Troubleshooting

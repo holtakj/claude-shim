@@ -13,16 +13,8 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
 
-        boolean debug = Arrays.asList(args).contains("--shim-debug");
-
         Config cfg = loadConfig();
 
-        if (cfg.log_file != null) {
-            String logFile = cfg.log_file.startsWith("~")
-                    ? System.getProperty("user.home") + cfg.log_file.substring(1)
-                    : cfg.log_file;
-            System.setProperty("org.slf4j.simpleLogger.logFile", logFile);
-        }
         System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
         System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
         System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
@@ -33,18 +25,9 @@ public class Main {
 
         log.info("Claude detected on path: {}", real);
 
-
-        if (debug) {
-            System.out.println("Claude shim debug");
-            System.out.println("Binary: " + real);
-        }
-
         List<String> cmd = new ArrayList<>();
         cmd.add(real);
-
-        for (String a : args)
-            if (!a.equals("--shim-debug"))
-                cmd.add(a);
+        cmd.addAll(Arrays.asList(args));
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
 
@@ -125,7 +108,6 @@ public class Main {
         c.https_proxy = asString(parsed.get("https_proxy"));
         c.http_proxy = asString(parsed.get("http_proxy"));
         c.no_proxy = asString(parsed.get("no_proxy"));
-        c.log_file = asString(parsed.get("log_file"));
         c.disable_telemetry = asBoolean(parsed.get("disable_telemetry"));
         return c;
     }

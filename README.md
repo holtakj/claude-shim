@@ -57,7 +57,6 @@ Example:
 ```properties
 https_proxy=http://127.0.0.1:8080
 disable_telemetry=true
-log_file=~/.claude-shim.log
 ```
 
 Supported keys:
@@ -66,15 +65,6 @@ Supported keys:
 - `http_proxy`
 - `no_proxy`
 - `disable_telemetry`
-- `log_file`
-
-## Debug mode
-
-```
-claude --shim-debug
-```
-
-Shows detected binary and environment configuration.
 
 ## Troubleshooting
 
@@ -85,7 +75,6 @@ Shows detected binary and environment configuration.
 ```properties
 https_proxy=http://127.0.0.1:8080
 disable_telemetry=true
-log_file=~/.claude-shim.log
 ```
 
 ### Native toolchain download fails
