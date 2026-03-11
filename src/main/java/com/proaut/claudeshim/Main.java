@@ -87,7 +87,7 @@ public class Main {
             log.info("Looking for config file at {}", p);
 
             if (!Files.exists(p)) {
-                Path legacyYaml = p.resolveSibling("config.properties");
+                Path legacyYaml = p.resolveSibling("config.yaml");
                 if (Files.exists(legacyYaml)) {
                     log.warn("Found legacy YAML config at {} but only Java properties are supported now; migrate it to {}", legacyYaml, p);
                 } else {

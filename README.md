@@ -2,18 +2,17 @@
 
 A native-friendly Java wrapper for the `claude` CLI.
 
+> Quickstart: see [`INSTALL.md`](INSTALL.md) for the fastest path to building the native shim and putting it first on `PATH`.
+
+## Description
+
 Features:
 
 - PATH shadowing (no renaming required)
-- Java properties configuration
 - HTTP / HTTPS proxy support
 - Optional telemetry disabling
-- Structured JSON logging
-- Plugin hooks
 - GraalVM native binary support
 - Automatic GraalVM JDK 25 provisioning for native builds
-- Gradle configuration cache enabled by default
-- Debug mode (`--shim-debug`)
 
 ## Build
 
