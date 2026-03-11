@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -59,5 +60,26 @@ class MainConfigTest {
         assertEquals("http://proxy.example:8443", config.https_proxy);
         assertEquals("localhost", config.no_proxy);
         assertEquals(Boolean.TRUE, config.disable_telemetry);
+    }
+
+    @Test
+    void usesWindowsAppDataForDefaultConfigPath() {
+        Path p = Main.resolveDefaultConfigPath(
+                "Windows 11",
+                Map.of("APPDATA", "C:/Users/user/AppData/Roaming"),
+                "C:/Users/user");
+
+        assertEquals(
+                Path.of("C:/Users/user/AppData/Roaming", "claude-shim", "config.properties").normalize(),
+                p.normalize());
+    }
+
+    @Test
+    void usesWindowsRoamingFallbackWhenAppDataIsMissing() {
+        Path p = Main.resolveDefaultConfigPath("Windows 11", Map.of(), "C:/Users/user");
+
+        assertEquals(
+                Path.of("C:/Users/user", "AppData", "Roaming", "claude-shim", "config.properties").normalize(),
+                p.normalize());
     }
 }

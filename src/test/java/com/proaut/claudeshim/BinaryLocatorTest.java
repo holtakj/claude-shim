@@ -34,6 +34,23 @@ public class BinaryLocatorTest {
     }
 
     @Test
+    void resolvesWindowsExecutableNamesAndSkipsSelf() throws Exception {
+        Path tempDir = Files.createTempDirectory("binary-locator-win-test");
+        Path selfDir = Files.createDirectory(tempDir.resolve("self"));
+        Path realDir = Files.createDirectory(tempDir.resolve("real"));
+
+        Path selfClaude = Files.createFile(selfDir.resolve("claude.exe"));
+        Path realClaude = Files.createFile(realDir.resolve("claude.cmd"));
+
+        String path = selfDir + File.pathSeparator + realDir;
+
+        String result = BinaryLocator.findRealClaude(path, selfClaude, "Windows 11");
+
+        assertNotNull(result);
+        assertEquals(realClaude.toAbsolutePath().normalize(), Path.of(result).toAbsolutePath().normalize());
+    }
+
+    @Test
     void returnsNullWhenPathIsNull() {
         assertNull(BinaryLocator.findRealClaude(null, null));
     }

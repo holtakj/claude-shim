@@ -70,12 +70,7 @@ public class Main {
             log.info("Looking for config file at {}", p);
 
             if (!Files.exists(p)) {
-                Path legacyYaml = p.resolveSibling("config.yaml");
-                if (Files.exists(legacyYaml)) {
-                    log.warn("Found legacy YAML config at {} but only Java properties are supported now; migrate it to {}", legacyYaml, p);
-                } else {
-                    log.warn("No config file found at {}", p);
-                }
+                log.warn("No config file found at {}", p);
                 return new Config();
             }
 
@@ -113,7 +108,31 @@ public class Main {
     }
 
     private static Path defaultConfigPath() {
-        return Paths.get(System.getProperty("user.home"), ".config", "claude-shim", "config.properties");
+        return resolveDefaultConfigPath(System.getProperty("os.name", ""), System.getenv(), System.getProperty("user.home", ""));
+    }
+
+    static Path resolveDefaultConfigPath(String osName, Map<String, String> env, String userHome) {
+        boolean windows = osName != null && osName.toLowerCase(Locale.ROOT).contains("windows");
+        boolean mac = osName != null && osName.toLowerCase(Locale.ROOT).contains("mac");
+
+        if (windows) {
+            String appData = env.get("APPDATA");
+            if (appData != null && !appData.isBlank()) {
+                return Paths.get(appData, "claude-shim", "config.properties");
+            }
+            return Paths.get(userHome, "AppData", "Roaming", "claude-shim", "config.properties");
+        }
+
+        if (mac) {
+            return Paths.get(userHome, "Library", "Application Support", "claude-shim", "config.properties");
+        }
+
+        String xdgConfigHome = env.get("XDG_CONFIG_HOME");
+        if (xdgConfigHome != null && !xdgConfigHome.isBlank()) {
+            return Paths.get(xdgConfigHome, "claude-shim", "config.properties");
+        }
+
+        return Paths.get(userHome, ".config", "claude-shim", "config.properties");
     }
 
     private static String asString(Object value) {

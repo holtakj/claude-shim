@@ -4,24 +4,30 @@ This guide shows how to build the native `claude` shim and place it first on you
 
 ## Prerequisites
 
-- Linux or another POSIX-like environment
 - A working Gradle wrapper from this repository
 - Network access on the first native build so Gradle can download a GraalVM JDK 25 toolchain automatically
 - The real `claude` CLI already installed somewhere else on your `PATH`
 
 ## 1. Compile the native image
 
-From the repository root, build the native binary:
+From the repository root, build the native binary.
+
+Linux/macOS:
 
 ```bash
 ./gradlew clean test nativeCompile
 ```
 
+Windows PowerShell:
+
+```powershell
+.\gradlew.bat clean test nativeCompile
+```
+
 The compiled binary is written to:
 
-```text
-build/native/nativeCompile/claude
-```
+- Linux/macOS: `build/native/nativeCompile/claude`
+- Windows: `build/native/nativeCompile/claude.exe`
 
 ## 2. Put the compiled shim first on `PATH`
 
@@ -32,20 +38,22 @@ That means:
 - the compiled shim directory must be **before** the real Claude CLI on `PATH`
 - the real Claude CLI must still remain on `PATH` somewhere later
 
-For `zsh`, add the build output directory to the front of `PATH`:
+### Linux/macOS (`zsh`)
+
+Add the build output directory to the front of `PATH`:
 
 ```bash
 export PATH="/path/to/claude-shim/build/native/nativeCompile:$PATH"
 ```
 
-To make that persistent for your user, add the same line to `~/.zshrc`, then reload your shell:
+Persist it in `~/.zshrc`:
 
 ```bash
 echo 'export PATH="/path/to/claude-shim/build/native/nativeCompile:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-If you prefer not to reference the repository build directory directly, you can copy the binary into a personal bin directory and prepend that directory instead:
+Optional copy-based setup:
 
 ```bash
 mkdir -p ~/.local/bin
@@ -55,33 +63,46 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
+### Windows (PowerShell)
+
+Add the build output directory for the current session:
+
+```powershell
+$env:PATH = "C:\path\to\claude-shim\build\native\nativeCompile;$env:PATH"
+```
+
+Persist it for the current user:
+
+```powershell
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "C:\path\to\claude-shim\build\native\nativeCompile;" + $userPath, "User")
+```
+
+After updating user-level `Path`, open a new terminal.
+
 ## 3. Verify the shim is found first
 
-Check which `claude` your shell resolves first:
+Linux/macOS:
 
 ```bash
 which claude
 ```
 
-It should point to either:
+Windows PowerShell:
 
-```text
-/path/to/claude-shim/build/native/nativeCompile/claude
+```powershell
+Get-Command claude
 ```
 
-or your copied location such as:
-
-```text
-~/.local/bin/claude
-```
+It should point to your shim location first.
 
 ## 4. Optional configuration
 
-If you want proxy or telemetry settings, create:
+If you want proxy or telemetry settings, create `config.properties` in the default OS-specific config location:
 
-```text
-~/.config/claude-shim/config.properties
-```
+- Linux: `~/.config/claude-shim/config.properties` (or `$XDG_CONFIG_HOME/claude-shim/config.properties`)
+- macOS: `~/Library/Application Support/claude-shim/config.properties`
+- Windows: `%APPDATA%\claude-shim\config.properties`
 
 Example:
 
@@ -94,13 +115,7 @@ disable_telemetry=true
 
 ### `claude` still resolves to the original CLI
 
-Your shim directory is not first on `PATH`. Check the current order:
-
-```bash
-print -l ${(s/:/)PATH}
-```
-
-Move the shim directory earlier in `~/.zshrc`, reload the shell, and run `which claude` again.
+Your shim directory is not first on `PATH`. Move the shim directory earlier, open a new shell/session, and verify command resolution again.
 
 ### The shim cannot find the real Claude CLI
 

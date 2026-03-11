@@ -1,6 +1,6 @@
 # Claude Shim
 
-A native-friendly Java wrapper for the `claude` CLI.
+A native-friendly Java wrapper for the `claude` CLI on Linux, macOS, and Windows.
 
 > Quickstart: see [`INSTALL.md`](INSTALL.md) for the fastest path to building the native shim and putting it first on `PATH`.
 
@@ -16,41 +16,64 @@ Features:
 
 ## Build
 
+Linux/macOS:
+
 ```bash
 ./gradlew build
+```
+
+Windows:
+
+```powershell
+.\gradlew.bat build
 ```
 
 Configuration cache is enabled by default, so repeated Gradle runs should be faster after the first invocation.
 
 ## Run tests
 
+Linux/macOS:
+
 ```bash
 ./gradlew test
+```
+
+Windows:
+
+```powershell
+.\gradlew.bat test
 ```
 
 ## Build native binary
 
 On the first `nativeCompile`, Gradle automatically provisions a GraalVM JDK 25 toolchain with `native-image` support when network access is available.
 
+Linux/macOS:
+
 ```bash
 ./gradlew nativeCompile
+```
+
+Windows:
+
+```powershell
+.\gradlew.bat nativeCompile
 ```
 
 If automatic provisioning is unavailable in your environment, you can still point Gradle at an existing GraalVM installation with `GRAALVM_HOME`.
 
 Binary output:
 
-```
-build/native/nativeCompile/claude
-```
+- Linux/macOS: `build/native/nativeCompile/claude`
+- Windows: `build/native/nativeCompile/claude.exe`
 
 ## Config file
 
-Create:
+Default config location:
 
-```
-~/.config/claude-shim/config.properties
-```
+- Linux: `~/.config/claude-shim/config.properties` (or `$XDG_CONFIG_HOME/claude-shim/config.properties`)
+- macOS: `~/Library/Application Support/claude-shim/config.properties`
+- Windows: `%APPDATA%\claude-shim\config.properties` (Roaming AppData)
 
 Example:
 
@@ -68,27 +91,27 @@ Supported keys:
 
 ## Troubleshooting
 
-### Migrate legacy YAML config
-
-`config.yaml` is no longer supported. Rename the file to `config.properties` and convert entries to Java properties syntax:
-
-```properties
-https_proxy=http://127.0.0.1:8080
-disable_telemetry=true
-```
-
 ### Native toolchain download fails
 
-If `./gradlew nativeCompile` cannot download GraalVM automatically, check that the machine has network access to the toolchain repositories Gradle uses. As a fallback, point Gradle at an existing GraalVM installation:
+If `nativeCompile` cannot download GraalVM automatically, check that the machine has network access to the toolchain repositories Gradle uses. As a fallback, point Gradle at an existing GraalVM installation.
+
+Linux/macOS:
 
 ```bash
 export GRAALVM_HOME=/path/to/graalvm
 ./gradlew nativeCompile
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:GRAALVM_HOME = "C:\path\to\graalvm"
+.\gradlew.bat nativeCompile
+```
+
 ### Native build works poorly behind restrictive filesystem or security policies
 
-This project repairs broken `native-image` launchers in auto-provisioned GraalVM toolchains before `nativeCompile` runs. If your environment wipes or blocks files under `~/.gradle/jdks`, remove the affected downloaded JDK and run the build again so Gradle can provision it cleanly.
+This project repairs broken `native-image` launchers in auto-provisioned GraalVM toolchains before `nativeCompile` runs. If your environment wipes or blocks files under the Gradle JDK cache (`~/.gradle/jdks` on Unix-like systems), remove the affected downloaded JDK and run the build again so Gradle can provision it cleanly.
 
 ### First native build is slow
 
