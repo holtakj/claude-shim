@@ -120,3 +120,7 @@ The first `nativeCompile` run downloads GraalVM and builds the binary from scrat
 ### Configuration cache is not reused
 
 Configuration cache entries are invalidated when files like `build.gradle`, `settings.gradle`, or `gradle.properties` change. That is normal. The next run should reuse the cache again if the build configuration stays unchanged.
+
+## License
+
+This project is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE).
