@@ -40,7 +40,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.yaml:snakeyaml:2.2'
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+    implementation 'org.slf4j:slf4j-simple:2.0.17'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -56,7 +57,7 @@ test {
 }
 
 application {
-    mainClass = 'com.example.claudeshim.ClaudeShim'
+    mainClass = 'com.proaut.claudeshim.Main'
 }
 
 graalvmNative {
@@ -67,6 +68,10 @@ graalvmNative {
                 spec.languageVersion = JavaLanguageVersion.of(25)
                 spec.vendor = JvmVendorSpec.GRAAL_VM
                 spec.nativeImageCapable = true
+            }
+            buildArgs.add('--enable-url-protocols=https')
+            metadataRepository {
+                enabled = true
             }
         }
     }

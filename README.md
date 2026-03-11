@@ -5,8 +5,8 @@ A native-friendly Java wrapper for the `claude` CLI.
 Features:
 
 - PATH shadowing (no renaming required)
-- YAML configuration
-- HTTP / HTTPS / SOCKS proxy support
+- Java properties configuration
+- HTTP / HTTPS proxy support
 - Optional telemetry disabling
 - Structured JSON logging
 - Plugin hooks
@@ -50,16 +50,24 @@ build/native/nativeCompile/claude
 Create:
 
 ```
-~/.config/claude-shim/config.yaml
+~/.config/claude-shim/config.properties
 ```
 
 Example:
 
-```yaml
-https_proxy: http://127.0.0.1:8080
-disable_telemetry: true
-log_file: ~/.claude-shim.log
+```properties
+https_proxy=http://127.0.0.1:8080
+disable_telemetry=true
+log_file=~/.claude-shim.log
 ```
+
+Supported keys:
+
+- `https_proxy`
+- `http_proxy`
+- `no_proxy`
+- `disable_telemetry`
+- `log_file`
 
 ## Debug mode
 
@@ -70,6 +78,16 @@ claude --shim-debug
 Shows detected binary and environment configuration.
 
 ## Troubleshooting
+
+### Migrate legacy YAML config
+
+`config.yaml` is no longer supported. Rename the file to `config.properties` and convert entries to Java properties syntax:
+
+```properties
+https_proxy=http://127.0.0.1:8080
+disable_telemetry=true
+log_file=~/.claude-shim.log
+```
 
 ### Native toolchain download fails
 
