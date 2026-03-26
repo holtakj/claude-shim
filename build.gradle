@@ -14,22 +14,28 @@ abstract class RepairProvisionedNativeImageLaunchers extends org.gradle.api.Defa
 
     @org.gradle.api.tasks.TaskAction
     void repair() {
-        if (operatingSystemName.get().toLowerCase().contains('windows')) {
-            return
-        }
-
         def javaHome = new File(javaHomePath.get())
-        def launcherTargets = [
-            'native-image'          : new File(javaHome, 'lib/svm/bin/native-image'),
-            'native-image-configure': new File(javaHome, 'lib/svm/bin/native-image-configure')
-        ]
-        for (entry in launcherTargets.entrySet()) {
-            def launcherName = entry.key
-            def targetFile = entry.value
-            def launcherFile = new File(javaHome, "bin/${launcherName}")
-            if (targetFile.exists() && targetFile.canExecute() && (!launcherFile.exists() || launcherFile.length() == 0 || !launcherFile.canExecute())) {
-                launcherFile.text = "#!/usr/bin/env sh\nexec \"${targetFile.absolutePath}\" \"\$@\"\n"
-                launcherFile.setExecutable(true, false)
+        def isWindows = operatingSystemName.get().toLowerCase().contains('windows')
+
+        if (isWindows) {
+            def targetFile = new File(javaHome, 'lib/svm/bin/native-image.exe')
+            def launcherFile = new File(javaHome, 'bin/native-image.exe')
+            if (targetFile.exists() && !launcherFile.exists()) {
+                java.nio.file.Files.copy(targetFile.toPath(), launcherFile.toPath())
+            }
+        } else {
+            def launcherTargets = [
+                'native-image'          : new File(javaHome, 'lib/svm/bin/native-image'),
+                'native-image-configure': new File(javaHome, 'lib/svm/bin/native-image-configure')
+            ]
+            for (entry in launcherTargets.entrySet()) {
+                def launcherName = entry.key
+                def targetFile = entry.value
+                def launcherFile = new File(javaHome, "bin/${launcherName}")
+                if (targetFile.exists() && targetFile.canExecute() && (!launcherFile.exists() || launcherFile.length() == 0 || !launcherFile.canExecute())) {
+                    launcherFile.text = "#!/usr/bin/env sh\nexec \"${targetFile.absolutePath}\" \"\$@\"\n"
+                    launcherFile.setExecutable(true, false)
+                }
             }
         }
     }
@@ -67,7 +73,6 @@ graalvmNative {
             javaLauncher = javaToolchains.launcherFor { spec ->
                 spec.languageVersion = JavaLanguageVersion.of(25)
                 spec.vendor = JvmVendorSpec.GRAAL_VM
-                spec.nativeImageCapable = true
             }
             buildArgs.add('--enable-url-protocols=https')
             metadataRepository {
