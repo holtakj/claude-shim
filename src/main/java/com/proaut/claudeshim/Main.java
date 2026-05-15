@@ -32,7 +32,7 @@ public class Main {
             }
         }
 
-        Environment selectedEnv = resolveEnvironment(envName);
+        Environment selectedEnv = resolveEnvironment(envName, cfg);
 
         if (selectedEnv != null) {
             log.info("Using environment: {}", selectedEnv.name);
@@ -88,11 +88,16 @@ public class Main {
         System.exit(p.waitFor());
     }
 
-    static Environment resolveEnvironment(String envName) {
-        return resolveEnvironment(envName, envsDir());
+    static Environment resolveEnvironment(String envName, Config cfg) {
+        return resolveEnvironment(envName, envsDir(), cfg.envPaths, currentWorkingDirectory());
     }
 
     static Environment resolveEnvironment(String envName, Path envsDir) {
+        return resolveEnvironment(envName, envsDir, Map.of(), currentWorkingDirectory());
+    }
+
+    static Environment resolveEnvironment(String envName, Path envsDir,
+                                          Map<String, List<String>> envPaths, Path cwd) {
         log.info("Looking for environments in {}", envsDir);
         List<Environment> environments = EnvironmentLoader.listEnvironments(envsDir);
 
@@ -111,12 +116,82 @@ public class Main {
             System.exit(1);
         }
 
+        String pathMatchedEnv = findEnvironmentByPath(cwd, envPaths);
+        if (pathMatchedEnv != null) {
+            for (Environment e : environments) {
+                if (e.name.equals(pathMatchedEnv)) {
+                    log.info("Auto-selected environment '{}' from working directory {}", e.name, cwd);
+                    return e;
+                }
+            }
+            log.warn("Path mapping points to environment '{}', but no such environment file exists. " +
+                    "Falling back to default selection.", pathMatchedEnv);
+        }
+
         if (environments.size() == 1) {
             log.info("Only one environment found: {}. Using it.", environments.get(0).name);
             return environments.get(0);
         }
 
         return promptForEnvironment(environments);
+    }
+
+    static String findEnvironmentByPath(Path cwd, Map<String, List<String>> envPaths) {
+        if (cwd == null || envPaths == null || envPaths.isEmpty()) {
+            return null;
+        }
+
+        Path normalizedCwd;
+        try {
+            normalizedCwd = cwd.toAbsolutePath().normalize();
+        } catch (Exception e) {
+            log.warn("Could not normalize working directory '{}': {}", cwd, e.getMessage());
+            return null;
+        }
+
+        String bestMatch = null;
+        int bestDepth = -1;
+
+        for (Map.Entry<String, List<String>> entry : envPaths.entrySet()) {
+            for (String pathStr : entry.getValue()) {
+                Path mappedPath = expandAndNormalize(pathStr);
+                if (mappedPath == null) continue;
+                if (normalizedCwd.startsWith(mappedPath)) {
+                    int depth = mappedPath.getNameCount();
+                    if (depth > bestDepth) {
+                        bestDepth = depth;
+                        bestMatch = entry.getKey();
+                    }
+                }
+            }
+        }
+        return bestMatch;
+    }
+
+    static Path expandAndNormalize(String pathStr) {
+        if (pathStr == null || pathStr.isBlank()) return null;
+        try {
+            String expanded = pathStr;
+            if (expanded.equals("~") || expanded.startsWith("~/") || expanded.startsWith("~\\")) {
+                String home = System.getProperty("user.home", "");
+                if (!home.isEmpty()) {
+                    expanded = home + expanded.substring(1);
+                }
+            }
+            return Paths.get(expanded).toAbsolutePath().normalize();
+        } catch (Exception e) {
+            log.warn("Invalid path '{}' in path mappings: {}", pathStr, e.getMessage());
+            return null;
+        }
+    }
+
+    static Path currentWorkingDirectory() {
+        try {
+            return Paths.get("").toAbsolutePath();
+        } catch (Exception e) {
+            log.warn("Could not determine working directory: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static Environment promptForEnvironment(List<Environment> environments) {
@@ -193,6 +268,22 @@ public class Main {
         c.http_proxy = asString(parsed.get("http_proxy"));
         c.no_proxy = asString(parsed.get("no_proxy"));
         c.disable_telemetry = asBoolean(parsed.get("disable_telemetry"));
+
+        for (String key : properties.stringPropertyNames()) {
+            String trimmed = key.trim();
+            if (trimmed.toLowerCase(Locale.ROOT).startsWith("paths.")) {
+                String envName = trimmed.substring("paths.".length());
+                if (envName.isEmpty()) continue;
+                String value = properties.getProperty(key);
+                if (value == null || value.isBlank()) continue;
+                List<String> paths = new ArrayList<>();
+                for (String part : value.split(",")) {
+                    String trimmedPart = part.trim();
+                    if (!trimmedPart.isEmpty()) paths.add(trimmedPart);
+                }
+                if (!paths.isEmpty()) c.envPaths.put(envName, paths);
+            }
+        }
         return c;
     }
 
