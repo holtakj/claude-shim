@@ -67,6 +67,53 @@ Binary output:
 - Linux/macOS: `build/native/nativeCompile/claude`
 - Windows: `build/native/nativeCompile/claude.exe`
 
+## Environments
+
+Environments let you switch between different configurations (e.g. separate API keys for different customers) at startup.
+
+### Setup
+
+Create one `.properties` file per environment in the `envs/` subdirectory of your config location:
+
+- Linux: `~/.config/claude-shim/envs/`
+- macOS: `~/Library/Application Support/claude-shim/envs/`
+- Windows: `%APPDATA%\claude-shim\envs\`
+
+Example `~/.config/claude-shim/envs/customer-a.properties`:
+
+```properties
+env.ANTHROPIC_API_KEY=sk-ant-api-key-for-customer-a
+https_proxy=http://customer-a-proxy:8080
+disable_telemetry=true
+```
+
+Example `~/.config/claude-shim/envs/customer-b.properties`:
+
+```properties
+env.ANTHROPIC_API_KEY=sk-ant-api-key-for-customer-b
+```
+
+Use the `env.` prefix to set arbitrary environment variables. The standard config keys (`https_proxy`, `http_proxy`, `no_proxy`, `disable_telemetry`) work without a prefix and override the global config.
+
+### Usage
+
+Select an environment directly:
+
+```bash
+claude --env customer-a
+```
+
+If multiple environments exist and no `--env` flag is given, the shim prompts interactively:
+
+```
+Select environment:
+  [1] customer-a
+  [2] customer-b
+Choice:
+```
+
+If only one environment exists, it is selected automatically. If no environments exist (no `envs/` directory or no files in it), the shim proceeds without environment selection.
+
 ## Config file
 
 Default config location:
@@ -88,6 +135,19 @@ Supported keys:
 - `http_proxy`
 - `no_proxy`
 - `disable_telemetry`
+
+### Environment properties files
+
+Environment files support the same keys as above, plus arbitrary environment variables using the `env.` prefix:
+
+```properties
+https_proxy=http://customer-proxy:8080
+disable_telemetry=true
+env.ANTHROPIC_API_KEY=sk-ant-api-key-for-this-customer
+env.SOME_OTHER_VAR=value
+```
+
+Keys without the `env.` prefix override the global config for that session. Keys with `env.` are set as environment variables on the forwarded `claude` process.
 
 ## Troubleshooting
 
