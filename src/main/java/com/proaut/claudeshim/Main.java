@@ -32,6 +32,48 @@ public class Main {
     }
 
 
+    static final class ParsedArgs {
+        final String envName;
+        final boolean forceMenu;
+        final List<String> forwardArgs;
+
+        ParsedArgs(String envName, boolean forceMenu, List<String> forwardArgs) {
+            this.envName = envName;
+            this.forceMenu = forceMenu;
+            this.forwardArgs = forwardArgs;
+        }
+    }
+
+    static ParsedArgs parseArgs(String[] args) {
+        String envName = null;
+        boolean forceMenu = false;
+        List<String> forwardArgs = new ArrayList<>();
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if ("--env".equals(arg)) {
+                // Consume the next token as the env name, unless it is another flag
+                // or absent. A bare "--env" (no value) forces the selection menu.
+                if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+                    envName = args[++i];
+                }
+                if (envName == null || envName.isBlank()) {
+                    envName = null;
+                    forceMenu = true;
+                }
+            } else if (arg.startsWith("--env=")) {
+                String value = arg.substring("--env=".length());
+                if (value.isBlank()) {
+                    forceMenu = true;
+                } else {
+                    envName = value;
+                }
+            } else {
+                forwardArgs.add(arg);
+            }
+        }
+        return new ParsedArgs(envName, forceMenu, forwardArgs);
+    }
+
     public static void main(String[] args) throws Exception {
 
         System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
@@ -41,17 +83,10 @@ public class Main {
 
         Config cfg = loadConfig();
 
-        String envName = null;
-        List<String> forwardArgs = new ArrayList<>();
-        for (int i = 0; i < args.length; i++) {
-            if ("--env".equals(args[i]) && i + 1 < args.length) {
-                envName = args[++i];
-            } else {
-                forwardArgs.add(args[i]);
-            }
-        }
+        ParsedArgs parsed = parseArgs(args);
+        List<String> forwardArgs = parsed.forwardArgs;
 
-        Environment selectedEnv = resolveEnvironment(envName, cfg);
+        Environment selectedEnv = resolveEnvironment(parsed.envName, parsed.forceMenu, cfg);
 
         if (selectedEnv != null) {
             log.info("Using environment: {}", selectedEnv.name);
@@ -109,14 +144,23 @@ public class Main {
     }
 
     static Environment resolveEnvironment(String envName, Config cfg) {
-        return resolveEnvironment(envName, envsDir(), cfg.envPaths, currentWorkingDirectory());
+        return resolveEnvironment(envName, false, cfg);
+    }
+
+    static Environment resolveEnvironment(String envName, boolean forceMenu, Config cfg) {
+        return resolveEnvironment(envName, forceMenu, envsDir(), cfg.envPaths, currentWorkingDirectory());
     }
 
     static Environment resolveEnvironment(String envName, Path envsDir) {
-        return resolveEnvironment(envName, envsDir, Map.of(), currentWorkingDirectory());
+        return resolveEnvironment(envName, false, envsDir, Map.of(), currentWorkingDirectory());
     }
 
     static Environment resolveEnvironment(String envName, Path envsDir,
+                                          Map<String, List<String>> envPaths, Path cwd) {
+        return resolveEnvironment(envName, false, envsDir, envPaths, cwd);
+    }
+
+    static Environment resolveEnvironment(String envName, boolean forceMenu, Path envsDir,
                                           Map<String, List<String>> envPaths, Path cwd) {
         log.info("Looking for environments in {}", envsDir);
         log.info("Current working directory: {}", cwd);
@@ -138,6 +182,11 @@ public class Main {
             log.error("Environment '{}' not found. Available: {}", envName,
                     environments.stream().map(e -> e.name).toList());
             System.exit(1);
+        }
+
+        if (forceMenu) {
+            log.info("Empty --env provided, prompting for environment");
+            return promptForEnvironment(environments);
         }
 
         String pathMatchedEnv = findEnvironmentByPath(cwd, envPaths);

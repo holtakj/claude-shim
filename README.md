@@ -114,6 +114,12 @@ Choice:
 
 If only one environment exists, it is selected automatically. If no environments exist (no `envs/` directory or no files in it), the shim proceeds without environment selection.
 
+Pass `--env` with no value (or `--env=`) to always show the selection menu, even when a path mapping would otherwise auto-select an environment:
+
+```bash
+claude --env
+```
+
 ### Per-directory environments
 
 You can bind directories to environments in the global `config.properties` so that running `claude` inside a configured path (or any of its subdirectories) automatically selects the matching environment — no `--env` flag and no interactive prompt.
@@ -132,7 +138,7 @@ Resolution order when no `--env` flag is given:
 2. **Single environment** — if exactly one environment file exists, it is selected automatically.
 3. **Interactive prompt** — the user is asked to choose.
 
-The `--env` flag always overrides path matching. If a path mapping points to an environment name that does not have a corresponding `.properties` file, a warning is logged and the shim falls back to the normal selection.
+The `--env` flag always overrides path matching: `--env <name>` forces that environment, while a value-less `--env` forces the interactive prompt. If a path mapping points to an environment name that does not have a corresponding `.properties` file, a warning is logged and the shim falls back to the normal selection.
 
 ## Config file
 
