@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -102,6 +103,44 @@ class PathEnvironmentTest {
         String result = Main.findEnvironmentByPath(cwd, mappings);
 
         assertEquals("customer-a", result);
+    }
+
+    @Test
+    void picksMostSpecificWhenFolderIsSubfolderOfAnother() {
+        // Adversarial insertion order: the less specific parent is registered first.
+        // Selection must be driven by path depth, not by iteration order.
+        Map<String, List<String>> mappings = new LinkedHashMap<>();
+        mappings.put("parent", List.of("/work/project"));
+        mappings.put("child", List.of("/work/project/sub"));
+
+        Path cwd = Path.of("/work/project/sub/module/src").toAbsolutePath();
+
+        assertEquals("child", Main.findEnvironmentByPath(cwd, mappings));
+    }
+
+    @Test
+    void picksMostSpecificAcrossSeveralNestedLevels() {
+        Map<String, List<String>> mappings = new LinkedHashMap<>();
+        mappings.put("level1", List.of("/work"));
+        mappings.put("level2", List.of("/work/a"));
+        mappings.put("level3", List.of("/work/a/b"));
+
+        Path cwd = Path.of("/work/a/b/c/d").toAbsolutePath();
+
+        assertEquals("level3", Main.findEnvironmentByPath(cwd, mappings));
+    }
+
+    @Test
+    void picksParentWhenCwdIsAboveTheSubfolder() {
+        // Parent registered after the child, but cwd is not inside the child folder,
+        // so only the parent mapping matches.
+        Map<String, List<String>> mappings = new LinkedHashMap<>();
+        mappings.put("child", List.of("/work/project/sub"));
+        mappings.put("parent", List.of("/work/project"));
+
+        Path cwd = Path.of("/work/project/other").toAbsolutePath();
+
+        assertEquals("parent", Main.findEnvironmentByPath(cwd, mappings));
     }
 
     @Test
