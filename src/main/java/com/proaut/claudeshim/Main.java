@@ -13,6 +13,25 @@ public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
+    private static String maskPasswordInUrl(String url) {
+        if (url == null) return null;
+        int protoIdx = url.indexOf("://");
+        if (protoIdx != -1) {
+            int startUserinfo = protoIdx + 3;
+            int atIdx = url.indexOf('@', startUserinfo);
+            if (atIdx != -1) {
+                String userinfo = url.substring(startUserinfo, atIdx);
+                int colonIdx = userinfo.indexOf(':');
+                if (colonIdx != -1 && colonIdx < userinfo.length() - 1) {
+                    String username = userinfo.substring(0, colonIdx);
+                    return url.substring(0, startUserinfo) + username + ":*****" + url.substring(atIdx);
+                }
+            }
+        }
+        return url;
+    }
+
+
     public static void main(String[] args) throws Exception {
 
         System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
@@ -40,10 +59,11 @@ public class Main {
             if (selectedEnv.config.http_proxy != null) cfg.http_proxy = selectedEnv.config.http_proxy;
             if (selectedEnv.config.no_proxy != null) cfg.no_proxy = selectedEnv.config.no_proxy;
             if (selectedEnv.config.disable_telemetry != null) cfg.disable_telemetry = selectedEnv.config.disable_telemetry;
+        } else {
+            log.warn("No environment specified, using default value");
         }
 
         String real = BinaryLocator.findRealClaude();
-
         log.info("Claude detected on path: {}", real);
 
         List<String> cmd = new ArrayList<>();
@@ -62,12 +82,12 @@ public class Main {
         }
 
         if (cfg.https_proxy != null) {
-            log.info("Using HTTPS_PROXY: {}", cfg.https_proxy);
+            log.info("Using HTTPS_PROXY: {}", maskPasswordInUrl(cfg.https_proxy));
             env.put("HTTPS_PROXY", cfg.https_proxy);
         }
 
         if (cfg.http_proxy != null) {
-            log.info("Using HTTP_PROXY: {}", cfg.http_proxy);
+            log.info("Using HTTP_PROXY: {}", maskPasswordInUrl(cfg.http_proxy));
             env.put("HTTP_PROXY", cfg.http_proxy);
         }
 
@@ -99,7 +119,10 @@ public class Main {
     static Environment resolveEnvironment(String envName, Path envsDir,
                                           Map<String, List<String>> envPaths, Path cwd) {
         log.info("Looking for environments in {}", envsDir);
+        log.info("Current working directory: {}", cwd);
         List<Environment> environments = EnvironmentLoader.listEnvironments(envsDir);
+        log.info("Found {} environment in {}", environments.size(), envsDir);
+
 
         if (environments.isEmpty()) {
             return null;
@@ -108,6 +131,7 @@ public class Main {
         if (envName != null) {
             for (Environment e : environments) {
                 if (e.name.equals(envName)) {
+                    log.info("Using environment '{}'", e.name);
                     return e;
                 }
             }
@@ -126,6 +150,8 @@ public class Main {
             }
             log.warn("Path mapping points to environment '{}', but no such environment file exists. " +
                     "Falling back to default selection.", pathMatchedEnv);
+        } else {
+            log.info("No environment matched by path for working directory {}", cwd);
         }
 
         if (environments.size() == 1) {
@@ -196,6 +222,7 @@ public class Main {
 
     private static Environment promptForEnvironment(List<Environment> environments) {
         try {
+            log.info("Prompting for environment");
             return InteractivePrompt.select("Select environment:", environments, e -> e.name);
         } catch (Exception e) {
             log.debug("Interactive prompt unavailable ({}), falling back to numeric input", e.getMessage());
