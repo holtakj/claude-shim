@@ -4,184 +4,203 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.file.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Main entry point for the Claude Shim - a native-friendly wrapper for the claude CLI.
+ * <p>
+ * Features:
+ * <ul>
+ *   <li>PATH shadowing (no renaming required)</li>
+ *   <li>HTTP/HTTPS proxy support</li>
+ *   <li>Environment-based configuration</li>
+ *   <li>GraalVM native binary support</li>
+ * </ul>
+ */
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
-    private static String maskPasswordInUrl(String url) {
-        if (url == null) return null;
-        int protoIdx = url.indexOf("://");
-        if (protoIdx != -1) {
-            int startUserinfo = protoIdx + 3;
-            int atIdx = url.indexOf('@', startUserinfo);
-            if (atIdx != -1) {
-                String userinfo = url.substring(startUserinfo, atIdx);
-                int colonIdx = userinfo.indexOf(':');
-                if (colonIdx != -1 && colonIdx < userinfo.length() - 1) {
-                    String username = userinfo.substring(0, colonIdx);
-                    return url.substring(0, startUserinfo) + username + ":*****" + url.substring(atIdx);
-                }
-            }
-        }
-        return url;
-    }
+    private static final String ENV_PREFIX = "env.";
 
+    // ==================== Data Records ====================
 
-    static final class ParsedArgs {
-        final String envName;
-        final boolean forceMenu;
-        final List<String> forwardArgs;
+    /**
+     * Holds parsed command-line arguments.
+     */
+    public record ParsedArgs(String envName, boolean forceMenu, List<String> forwardArgs) {}
 
-        ParsedArgs(String envName, boolean forceMenu, List<String> forwardArgs) {
-            this.envName = envName;
-            this.forceMenu = forceMenu;
-            this.forwardArgs = forwardArgs;
-        }
-    }
+    /**
+     * Holds environment-specific configuration including extra environment variables.
+     */
+    public record EnvironmentConfig(String name, ProxyConfig proxyConfig, Map<String, String> extraEnvVars) {}
 
-    static ParsedArgs parseArgs(String[] args) {
-        String envName = null;
-        boolean forceMenu = false;
-        List<String> forwardArgs = new ArrayList<>();
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i];
-            if ("--env".equals(arg)) {
-                // Consume the next token as the env name, unless it is another flag
-                // or absent. A bare "--env" (no value) forces the selection menu.
-                if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
-                    envName = args[++i];
-                }
-                if (envName == null || envName.isBlank()) {
-                    envName = null;
-                    forceMenu = true;
-                }
-            } else if (arg.startsWith("--env=")) {
-                String value = arg.substring("--env=".length());
-                if (value.isBlank()) {
-                    forceMenu = true;
-                } else {
-                    envName = value;
-                }
-            } else {
-                forwardArgs.add(arg);
-            }
-        }
-        return new ParsedArgs(envName, forceMenu, forwardArgs);
-    }
+    // ==================== Main Entry Point ====================
 
     public static void main(String[] args) throws Exception {
+        configureLogging();
 
+        Config config = loadConfig(defaultConfigPath());
+        ParsedArgs parsedArgs = parseArgs(args);
+
+        Environment selectedEnv = resolveEnvironment(parsedArgs, config);
+
+        if (selectedEnv != null) {
+            log.info("Using environment: {}", selectedEnv.name());
+            config = applyEnvironmentConfig(config, selectedEnv);
+        } else {
+            log.warn("No environment specified, using default configuration");
+        }
+
+        String realClaudePath = BinaryLocator.findRealClaude();
+        log.info("Claude detected on path: {}", realClaudePath);
+
+        List<String> command = new ArrayList<>();
+        command.add(realClaudePath);
+        command.addAll(parsedArgs.forwardArgs());
+
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        Map<String, String> environment = processBuilder.environment();
+
+        if (selectedEnv != null) {
+            selectedEnv.extraEnvVars().forEach((key, value) -> {
+                log.info("Setting env var from environment '{}': {}", selectedEnv.name(), key);
+                environment.put(key, value);
+            });
+        }
+
+        applyProxyConfig(environment, config.proxy());
+        applyTelemetryConfig(environment, config.proxy());
+
+        processBuilder.inheritIO();
+
+        Process process = processBuilder.start();
+        System.exit(process.waitFor());
+    }
+
+    // ==================== Configuration ====================
+
+    private static void configureLogging() {
         System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
         System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
         System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
         System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
+    }
 
-        Config cfg = loadConfig();
+    public static Config loadConfig(Path configPath) {
+        try {
+            log.info("Looking for config file at {}", configPath);
 
-        ParsedArgs parsed = parseArgs(args);
-        List<String> forwardArgs = parsed.forwardArgs;
-
-        Environment selectedEnv = resolveEnvironment(parsed.envName, parsed.forceMenu, cfg);
-
-        if (selectedEnv != null) {
-            log.info("Using environment: {}", selectedEnv.name);
-            if (selectedEnv.config.https_proxy != null) cfg.https_proxy = selectedEnv.config.https_proxy;
-            if (selectedEnv.config.http_proxy != null) cfg.http_proxy = selectedEnv.config.http_proxy;
-            if (selectedEnv.config.no_proxy != null) cfg.no_proxy = selectedEnv.config.no_proxy;
-            if (selectedEnv.config.disable_telemetry != null) cfg.disable_telemetry = selectedEnv.config.disable_telemetry;
-        } else {
-            log.warn("No environment specified, using default value");
-        }
-
-        String real = BinaryLocator.findRealClaude();
-        log.info("Claude detected on path: {}", real);
-
-        List<String> cmd = new ArrayList<>();
-        cmd.add(real);
-        cmd.addAll(forwardArgs);
-
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-
-        Map<String, String> env = pb.environment();
-
-        if (selectedEnv != null) {
-            for (Map.Entry<String, String> entry : selectedEnv.extraEnvVars.entrySet()) {
-                log.info("Setting env var from environment '{}': {}", selectedEnv.name, entry.getKey());
-                env.put(entry.getKey(), entry.getValue());
+            if (!Files.exists(configPath)) {
+                log.warn("No config file found at {}", configPath);
+                return new Config(ProxyConfig.empty(), Map.of());
             }
+
+            String content = Files.readString(configPath);
+            Config loadedConfig = parseConfig(content);
+            log.info("Loaded config from {}", configPath);
+            return loadedConfig;
+
+        } catch (IOException e) {
+            log.error("Error loading config: {}", e.getMessage());
+            return new Config(ProxyConfig.empty(), Map.of());
         }
-
-        if (cfg.https_proxy != null) {
-            log.info("Using HTTPS_PROXY: {}", maskPasswordInUrl(cfg.https_proxy));
-            env.put("HTTPS_PROXY", cfg.https_proxy);
-        }
-
-        if (cfg.http_proxy != null) {
-            log.info("Using HTTP_PROXY: {}", maskPasswordInUrl(cfg.http_proxy));
-            env.put("HTTP_PROXY", cfg.http_proxy);
-        }
-
-        if (cfg.no_proxy != null) {
-            log.info("Using NO_PROXY: {}", cfg.no_proxy);
-            env.put("NO_PROXY", cfg.no_proxy);
-        }
-
-        if (Boolean.TRUE.equals(cfg.disable_telemetry)) {
-            log.info("Telemetry disabled");
-            env.put("DO_NOT_TRACK", "1");
-            env.put("CLAUDE_DISABLE_TELEMETRY", "1");
-        }
-
-        pb.inheritIO();
-
-        Process p = pb.start();
-        System.exit(p.waitFor());
     }
 
-    static Environment resolveEnvironment(String envName, Config cfg) {
-        return resolveEnvironment(envName, false, cfg);
+    public static Config parseConfig(String content) {
+        Properties properties = new Properties();
+        try {
+            properties.load(new StringReader(content));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid properties configuration", e);
+        }
+
+        Map<String, String> normalized = normalizeKeys(properties);
+
+        ProxyConfig proxyConfig = buildProxyConfig(normalized);
+        Map<String, List<String>> pathMappings = buildPathMappings(normalized);
+
+        return new Config(proxyConfig, pathMappings);
     }
 
-    static Environment resolveEnvironment(String envName, boolean forceMenu, Config cfg) {
-        return resolveEnvironment(envName, forceMenu, envsDir(), cfg.envPaths, currentWorkingDirectory());
+    private static Map<String, String> normalizeKeys(Properties properties) {
+        return properties.stringPropertyNames().stream()
+            .collect(Collectors.toMap(
+                key -> key.trim().toLowerCase(Locale.ROOT),
+                properties::getProperty
+            ));
     }
 
-    static Environment resolveEnvironment(String envName, Path envsDir) {
+    private static ProxyConfig buildProxyConfig(Map<String, String> config) {
+        return new ProxyConfig(
+            asString(config.get("https_proxy")),
+            asString(config.get("http_proxy")),
+            asString(config.get("no_proxy")),
+            asBoolean(config.get("disable_telemetry"))
+        );
+    }
+
+    private static Map<String, List<String>> buildPathMappings(Map<String, String> config) {
+        return config.entrySet().stream()
+            .filter(e -> e.getKey().startsWith("paths."))
+            .map(e -> {
+                String envName = e.getKey().substring("paths.".length());
+                String value = e.getValue();
+                return envName.isEmpty() ? null : Map.entry(envName, parsePathList(value));
+            })
+            .filter(Objects::nonNull)
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                Map.Entry::getValue,
+                (a, b) -> a
+            ));
+    }
+
+    private static List<String> parsePathList(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+            .map(String::trim)
+            .filter(StringUtils::isNotBlank)
+            .toList();
+    }
+
+    // ==================== Environment Resolution ====================
+
+    public static Environment resolveEnvironment(ParsedArgs args, Config config) {
+        Path envsDir = defaultConfigPath().getParent().resolve("envs");
+        Path cwd = currentWorkingDirectory();
+        return resolveEnvironment(args.envName(), args.forceMenu(), envsDir, config.pathMappings(), cwd);
+    }
+
+    public static Environment resolveEnvironment(String envName, Path envsDir) {
         return resolveEnvironment(envName, false, envsDir, Map.of(), currentWorkingDirectory());
     }
 
-    static Environment resolveEnvironment(String envName, Path envsDir,
-                                          Map<String, List<String>> envPaths, Path cwd) {
+    public static Environment resolveEnvironment(String envName, Path envsDir, Map<String, List<String>> envPaths, Path cwd) {
         return resolveEnvironment(envName, false, envsDir, envPaths, cwd);
     }
 
-    static Environment resolveEnvironment(String envName, boolean forceMenu, Path envsDir,
-                                          Map<String, List<String>> envPaths, Path cwd) {
+    public static Environment resolveEnvironment(String envName, boolean forceMenu, Path envsDir,
+                                                 Map<String, List<String>> pathMappings, Path cwd) {
         log.info("Looking for environments in {}", envsDir);
         log.info("Current working directory: {}", cwd);
-        List<Environment> environments = EnvironmentLoader.listEnvironments(envsDir);
-        log.info("Found {} environment in {}", environments.size(), envsDir);
 
+        List<Environment> environments = loadEnvironments(envsDir);
+        log.info("Found {} environment(s) in {}", environments.size(), envsDir);
 
         if (environments.isEmpty()) {
             return null;
         }
 
         if (envName != null) {
-            for (Environment e : environments) {
-                if (e.name.equals(envName)) {
-                    log.info("Using environment '{}'", e.name);
-                    return e;
-                }
-            }
-            log.error("Environment '{}' not found. Available: {}", envName,
-                    environments.stream().map(e -> e.name).toList());
-            System.exit(1);
+            return findEnvironmentByName(environments, envName);
         }
 
         if (forceMenu) {
@@ -189,90 +208,60 @@ public class Main {
             return promptForEnvironment(environments);
         }
 
-        String pathMatchedEnv = findEnvironmentByPath(cwd, envPaths);
-        if (pathMatchedEnv != null) {
-            for (Environment e : environments) {
-                if (e.name.equals(pathMatchedEnv)) {
-                    log.info("Auto-selected environment '{}' from working directory {}", e.name, cwd);
-                    return e;
-                }
+        String pathMatch = PathMapper.findMatchingEnvironment(cwd, pathMappings);
+        if (pathMatch != null) {
+            Environment env = findEnvironmentByName(environments, pathMatch, false);
+            if (env != null) {
+                log.info("Auto-selected environment '{}' from working directory {}", env.name(), cwd);
+                return env;
             }
             log.warn("Path mapping points to environment '{}', but no such environment file exists. " +
-                    "Falling back to default selection.", pathMatchedEnv);
+                    "Falling back to default selection.", pathMatch);
         } else {
             log.info("No environment matched by path for working directory {}", cwd);
         }
 
         if (environments.size() == 1) {
-            log.info("Only one environment found: {}. Using it.", environments.get(0).name);
+            log.info("Only one environment found: {}. Using it.", environments.get(0).name());
             return environments.get(0);
         }
 
         return promptForEnvironment(environments);
     }
 
-    static String findEnvironmentByPath(Path cwd, Map<String, List<String>> envPaths) {
-        if (cwd == null || envPaths == null || envPaths.isEmpty()) {
-            return null;
-        }
-
-        Path normalizedCwd;
+    private static List<Environment> loadEnvironments(Path envsDir) {
         try {
-            normalizedCwd = cwd.toAbsolutePath().normalize();
+            return EnvironmentLoader.listEnvironments(envsDir);
         } catch (Exception e) {
-            log.warn("Could not normalize working directory '{}': {}", cwd, e.getMessage());
-            return null;
-        }
-
-        String bestMatch = null;
-        int bestDepth = -1;
-
-        for (Map.Entry<String, List<String>> entry : envPaths.entrySet()) {
-            for (String pathStr : entry.getValue()) {
-                Path mappedPath = expandAndNormalize(pathStr);
-                if (mappedPath == null) continue;
-                if (normalizedCwd.startsWith(mappedPath)) {
-                    int depth = mappedPath.getNameCount();
-                    if (depth > bestDepth) {
-                        bestDepth = depth;
-                        bestMatch = entry.getKey();
-                    }
-                }
-            }
-        }
-        return bestMatch;
-    }
-
-    static Path expandAndNormalize(String pathStr) {
-        if (pathStr == null || pathStr.isBlank()) return null;
-        try {
-            String expanded = pathStr;
-            if (expanded.equals("~") || expanded.startsWith("~/") || expanded.startsWith("~\\")) {
-                String home = System.getProperty("user.home", "");
-                if (!home.isEmpty()) {
-                    expanded = home + expanded.substring(1);
-                }
-            }
-            return Paths.get(expanded).toAbsolutePath().normalize();
-        } catch (Exception e) {
-            log.warn("Invalid path '{}' in path mappings: {}", pathStr, e.getMessage());
-            return null;
+            log.error("Error loading environments: {}", e.getMessage());
+            return List.of();
         }
     }
 
-    static Path currentWorkingDirectory() {
-        try {
-            return Paths.get("").toAbsolutePath();
-        } catch (Exception e) {
-            log.warn("Could not determine working directory: {}", e.getMessage());
-            return null;
+    private static Environment findEnvironmentByName(List<Environment> environments, String name, boolean exitOnError) {
+        Environment result = environments.stream()
+            .filter(e -> e.name().equals(name))
+            .findFirst()
+            .orElse(null);
+
+        if (result == null && exitOnError) {
+            String available = environments.stream()
+                .map(Environment::name)
+                .collect(Collectors.joining(", "));
+            log.error("Environment '{}' not found. Available: {}", name, available);
+            System.exit(1);
         }
+        return result;
+    }
+
+    private static Environment findEnvironmentByName(List<Environment> environments, String name) {
+        return findEnvironmentByName(environments, name, true);
     }
 
     private static Environment promptForEnvironment(List<Environment> environments) {
         try {
             log.info("Prompting for environment");
-            return InteractivePrompt.select("Select environment:", environments, e -> e.name);
+            return InteractivePrompt.select("Select environment:", environments, Environment::name);
         } catch (Exception e) {
             log.debug("Interactive prompt unavailable ({}), falling back to numeric input", e.getMessage());
             return promptForEnvironmentNumeric(environments);
@@ -282,13 +271,12 @@ public class Main {
     private static Environment promptForEnvironmentNumeric(List<Environment> environments) {
         System.err.println("Select environment:");
         for (int i = 0; i < environments.size(); i++) {
-            System.err.printf("  [%d] %s%n", i + 1, environments.get(i).name);
+            System.err.printf("  [%d] %s%n", i + 1, environments.get(i).name());
         }
         System.err.print("Choice: ");
         System.err.flush();
 
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
             String line = reader.readLine();
             if (line == null) {
                 System.exit(1);
@@ -299,84 +287,103 @@ public class Main {
                 System.exit(1);
             }
             return environments.get(choice - 1);
-        } catch (Exception e) {
+        } catch (IOException | NumberFormatException e) {
             System.err.println("Invalid input.");
             System.exit(1);
             return null;
         }
     }
 
-    private static Path envsDir() {
-        return defaultConfigPath().getParent().resolve("envs");
+    private static Config applyEnvironmentConfig(Config config, Environment env) {
+        ProxyConfig mergedProxy = mergeProxyConfig(config.proxy(), env.config());
+        return new Config(mergedProxy, config.pathMappings());
     }
 
-    private static Config loadConfig() {
-        return loadConfig(defaultConfigPath());
+    private static ProxyConfig mergeProxyConfig(ProxyConfig base, ProxyConfig overlay) {
+        return new ProxyConfig(
+            overlay.httpsProxy() != null ? overlay.httpsProxy() : base.httpsProxy(),
+            overlay.httpProxy() != null ? overlay.httpProxy() : base.httpProxy(),
+            overlay.noProxy() != null ? overlay.noProxy() : base.noProxy(),
+            overlay.disableTelemetry() != null ? overlay.disableTelemetry() : base.disableTelemetry()
+        );
     }
 
-    static Config loadConfig(Path p) {
-        try {
-            log.info("Looking for config file at {}", p);
-
-            if (!Files.exists(p)) {
-                log.warn("No config file found at {}", p);
-                return new Config();
-            }
-
-            String content = Files.readString(p);
-            Config c = parseConfig(content);
-            log.info("Loaded config from {}", p);
-            return c;
-
-        } catch (Exception e) {
-            log.error("Error loading config: {}", e.getMessage());
+    private static void applyProxyConfig(Map<String, String> env, ProxyConfig proxy) {
+        if (proxy.httpsProxy() != null) {
+            log.info("Using HTTPS_PROXY: {}", maskPasswordInUrl(proxy.httpsProxy()));
+            env.put("HTTPS_PROXY", proxy.httpsProxy());
         }
-
-        return new Config();
+        if (proxy.httpProxy() != null) {
+            log.info("Using HTTP_PROXY: {}", maskPasswordInUrl(proxy.httpProxy()));
+            env.put("HTTP_PROXY", proxy.httpProxy());
+        }
+        if (proxy.noProxy() != null) {
+            log.info("Using NO_PROXY: {}", proxy.noProxy());
+            env.put("NO_PROXY", proxy.noProxy());
+        }
     }
 
-    static Config parseConfig(String content) {
-        Properties properties = new Properties();
-        try {
-            properties.load(new StringReader(content));
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid properties configuration", e);
+    private static void applyTelemetryConfig(Map<String, String> env, ProxyConfig proxy) {
+        if (Boolean.TRUE.equals(proxy.disableTelemetry())) {
+            log.info("Telemetry disabled");
+            env.put("DO_NOT_TRACK", "1");
+            env.put("CLAUDE_DISABLE_TELEMETRY", "1");
         }
+    }
 
-        Map<String, String> parsed = new HashMap<>();
-        for (String name : properties.stringPropertyNames()) {
-            parsed.put(name.trim().toLowerCase(Locale.ROOT), properties.getProperty(name));
-        }
+    // ==================== Argument Parsing ====================
 
-        Config c = new Config();
-        c.https_proxy = asString(parsed.get("https_proxy"));
-        c.http_proxy = asString(parsed.get("http_proxy"));
-        c.no_proxy = asString(parsed.get("no_proxy"));
-        c.disable_telemetry = asBoolean(parsed.get("disable_telemetry"));
+    public static ParsedArgs parseArgs(String[] args) {
+        String envName = null;
+        boolean forceMenu = false;
+        List<String> forwardArgs = new ArrayList<>();
 
-        for (String key : properties.stringPropertyNames()) {
-            String trimmed = key.trim();
-            if (trimmed.toLowerCase(Locale.ROOT).startsWith("paths.")) {
-                String envName = trimmed.substring("paths.".length());
-                if (envName.isEmpty()) continue;
-                String value = properties.getProperty(key);
-                if (value == null || value.isBlank()) continue;
-                List<String> paths = new ArrayList<>();
-                for (String part : value.split(",")) {
-                    String trimmedPart = part.trim();
-                    if (!trimmedPart.isEmpty()) paths.add(trimmedPart);
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if ("--env".equals(arg)) {
+                // Handle --env [value] or --env (bare for menu)
+                if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
+                    envName = args[++i];
                 }
-                if (!paths.isEmpty()) c.envPaths.put(envName, paths);
+                if (envName == null || envName.isBlank()) {
+                    envName = null;
+                    forceMenu = true;
+                }
+            } else if (arg.startsWith("--env=")) {
+                // Handle --env=value syntax
+                String value = arg.substring("--env=".length());
+                if (value.isBlank()) {
+                    forceMenu = true;
+                } else {
+                    envName = value;
+                }
+            } else {
+                forwardArgs.add(arg);
             }
         }
-        return c;
+
+        return new ParsedArgs(envName, forceMenu, forwardArgs);
+    }
+
+    // ==================== Utility Methods ====================
+
+    private static Path currentWorkingDirectory() {
+        try {
+            return Paths.get("").toAbsolutePath();
+        } catch (Exception e) {
+            log.warn("Could not determine working directory: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static Path defaultConfigPath() {
-        return resolveDefaultConfigPath(System.getProperty("os.name", ""), System.getenv(), System.getProperty("user.home", ""));
+        String osName = System.getProperty("os.name", "");
+        Map<String, String> env = System.getenv();
+        String userHome = System.getProperty("user.home", "");
+        return resolveDefaultConfigPath(osName, env, userHome);
     }
 
-    static Path resolveDefaultConfigPath(String osName, Map<String, String> env, String userHome) {
+    public static Path resolveDefaultConfigPath(String osName, Map<String, String> env, String userHome) {
         boolean windows = osName != null && osName.toLowerCase(Locale.ROOT).contains("windows");
         boolean mac = osName != null && osName.toLowerCase(Locale.ROOT).contains("mac");
 
@@ -400,7 +407,25 @@ public class Main {
         return Paths.get(userHome, ".config", "claude-shim", "config.properties");
     }
 
-    static String asString(Object value) {
+    private static String maskPasswordInUrl(String url) {
+        if (url == null) return null;
+        int protoIdx = url.indexOf("://");
+        if (protoIdx != -1) {
+            int startUserinfo = protoIdx + 3;
+            int atIdx = url.indexOf('@', startUserinfo);
+            if (atIdx != -1) {
+                String userinfo = url.substring(startUserinfo, atIdx);
+                int colonIdx = userinfo.indexOf(':');
+                if (colonIdx != -1 && colonIdx < userinfo.length() - 1) {
+                    String username = userinfo.substring(0, colonIdx);
+                    return url.substring(0, startUserinfo) + username + ":*****" + url.substring(atIdx);
+                }
+            }
+        }
+        return url;
+    }
+
+    public static String asString(Object value) {
         if (value == null) {
             return null;
         }
@@ -408,7 +433,7 @@ public class Main {
         return s.isEmpty() ? null : s;
     }
 
-    static Boolean asBoolean(Object value) {
+    public static Boolean asBoolean(Object value) {
         if (value == null) {
             return null;
         }
@@ -421,5 +446,26 @@ public class Main {
             case "0", "false", "no", "off" -> Boolean.FALSE;
             default -> null;
         };
+    }
+
+    // ==================== Config Class ====================
+
+    /**
+     * Holds the parsed configuration including proxy settings and path mappings.
+     */
+    public record Config(ProxyConfig proxy, Map<String, List<String>> pathMappings) {}
+
+    // ==================== Logger Access ====================
+
+    /**
+     * Returns the logger instance for this class.
+     * <p>
+     * This method is provided for utility classes that need to log but don't have
+     * direct access to the private {@code log} field.
+     *
+     * @return the logger instance
+     */
+    static Logger log() {
+        return log;
     }
 }

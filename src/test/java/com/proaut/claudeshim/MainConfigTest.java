@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -12,38 +13,38 @@ class MainConfigTest {
 
     @Test
     void parsesJavaPropertiesConfiguration() {
-        Config config = Main.parseConfig("""
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("""
                 https_proxy=http://proxy.example:8443
                 http_proxy=http://proxy.example:8080
                 no_proxy=localhost,127.0.0.1
                 disable_telemetry=yes
                 """);
 
-        assertEquals("http://proxy.example:8443", config.https_proxy);
-        assertEquals("http://proxy.example:8080", config.http_proxy);
-        assertEquals("localhost,127.0.0.1", config.no_proxy);
-        assertEquals(Boolean.TRUE, config.disable_telemetry);
+        assertEquals("http://proxy.example:8443", config.proxy().httpsProxy());
+        assertEquals("http://proxy.example:8080", config.proxy().httpProxy());
+        assertEquals("localhost,127.0.0.1", config.proxy().noProxy());
+        assertEquals(Boolean.TRUE, config.proxy().disableTelemetry());
     }
 
     @Test
     void supportsPropertiesSyntaxWithColonAndMixedCaseKeys() {
-        Config config = Main.parseConfig("""
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("""
                 HTTPS_PROXY: http://secure.example:8443
                 Disable_Telemetry: off
                 """);
 
-        assertEquals("http://secure.example:8443", config.https_proxy);
-        assertEquals(Boolean.FALSE, config.disable_telemetry);
+        assertEquals("http://secure.example:8443", config.proxy().httpsProxy());
+        assertEquals(Boolean.FALSE, config.proxy().disableTelemetry());
     }
 
     @Test
     void returnsEmptyConfigWhenPropertiesFileIsMissing() {
-        Config config = Main.loadConfig(Path.of("does-not-exist", "config.properties"));
+        com.proaut.claudeshim.Main.Config config = Main.loadConfig(Path.of("does-not-exist", "config.properties"));
 
-        assertNull(config.https_proxy);
-        assertNull(config.http_proxy);
-        assertNull(config.no_proxy);
-        assertNull(config.disable_telemetry);
+        assertNull(config.proxy().httpsProxy());
+        assertNull(config.proxy().httpProxy());
+        assertNull(config.proxy().noProxy());
+        assertNull(config.proxy().disableTelemetry());
     }
 
     @Test
@@ -55,11 +56,11 @@ class MainConfigTest {
                 disable_telemetry=1
                 """);
 
-        Config config = Main.loadConfig(tempFile);
+        com.proaut.claudeshim.Main.Config config = Main.loadConfig(tempFile);
 
-        assertEquals("http://proxy.example:8443", config.https_proxy);
-        assertEquals("localhost", config.no_proxy);
-        assertEquals(Boolean.TRUE, config.disable_telemetry);
+        assertEquals("http://proxy.example:8443", config.proxy().httpsProxy());
+        assertEquals("localhost", config.proxy().noProxy());
+        assertEquals(Boolean.TRUE, config.proxy().disableTelemetry());
     }
 
     @Test

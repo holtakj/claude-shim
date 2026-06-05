@@ -24,11 +24,11 @@ class EnvironmentTest {
 
         assertEquals(1, environments.size());
         Environment env = environments.get(0);
-        assertEquals("customer-a", env.name);
-        assertEquals("http://proxy-a:8080", env.config.https_proxy);
-        assertEquals(Boolean.TRUE, env.config.disable_telemetry);
-        assertEquals("sk-ant-key-a", env.extraEnvVars.get("ANTHROPIC_API_KEY"));
-        assertEquals("hello", env.extraEnvVars.get("CUSTOM_VAR"));
+        assertEquals("customer-a", env.name());
+        assertEquals("http://proxy-a:8080", env.config().httpsProxy());
+        assertEquals(Boolean.TRUE, env.config().disableTelemetry());
+        assertEquals("sk-ant-key-a", env.extraEnvVars().get("ANTHROPIC_API_KEY"));
+        assertEquals("hello", env.extraEnvVars().get("CUSTOM_VAR"));
     }
 
     @Test
@@ -41,8 +41,8 @@ class EnvironmentTest {
         var environments = EnvironmentLoader.listEnvironments(envsDir);
 
         assertEquals(2, environments.size());
-        assertEquals("alpha", environments.get(0).name);
-        assertEquals("zebra", environments.get(1).name);
+        assertEquals("alpha", environments.get(0).name());
+        assertEquals("zebra", environments.get(1).name());
     }
 
     @Test
@@ -61,8 +61,8 @@ class EnvironmentTest {
         Environment env = Main.resolveEnvironment("prod", envsDir);
 
         assertNotNull(env);
-        assertEquals("prod", env.name);
-        assertEquals("sk-prod", env.extraEnvVars.get("ANTHROPIC_API_KEY"));
+        assertEquals("prod", env.name());
+        assertEquals("sk-prod", env.extraEnvVars().get("ANTHROPIC_API_KEY"));
     }
 
     @Test
@@ -74,7 +74,7 @@ class EnvironmentTest {
         Environment env = Main.resolveEnvironment(null, envsDir);
 
         assertNotNull(env);
-        assertEquals("only", env.name);
+        assertEquals("only", env.name());
     }
 
     @Test

@@ -14,41 +14,41 @@ class PathEnvironmentTest {
 
     @Test
     void parsesPathMappingsFromConfig() {
-        Config config = Main.parseConfig("""
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("""
                 paths.customer-a=/work/customer-a,/srv/customer-a
                 paths.customer-b=/work/customer-b
                 """);
 
-        assertEquals(2, config.envPaths.size());
-        assertEquals(List.of("/work/customer-a", "/srv/customer-a"), config.envPaths.get("customer-a"));
-        assertEquals(List.of("/work/customer-b"), config.envPaths.get("customer-b"));
+        assertEquals(2, config.pathMappings().size());
+        assertEquals(List.of("/work/customer-a", "/srv/customer-a"), config.pathMappings().get("customer-a"));
+        assertEquals(List.of("/work/customer-b"), config.pathMappings().get("customer-b"));
     }
 
     @Test
     void ignoresEmptyPathEntriesInList() {
-        Config config = Main.parseConfig("""
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("""
                 paths.customer-a=/work/customer-a, , ,/srv/customer-a
                 """);
 
-        assertEquals(List.of("/work/customer-a", "/srv/customer-a"), config.envPaths.get("customer-a"));
+        assertEquals(List.of("/work/customer-a", "/srv/customer-a"), config.pathMappings().get("customer-a"));
     }
 
     @Test
     void ignoresPathsKeyWithEmptyEnvName() {
-        Config config = Main.parseConfig("""
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("""
                 paths.=/work/orphan
                 paths.real=/work/real
                 """);
 
-        assertEquals(1, config.envPaths.size());
-        assertTrue(config.envPaths.containsKey("real"));
+        assertEquals(1, config.pathMappings().size());
+        assertTrue(config.pathMappings().containsKey("real"));
     }
 
     @Test
     void emptyConfigHasEmptyEnvPaths() {
-        Config config = Main.parseConfig("https_proxy=http://x\n");
-        assertNotNull(config.envPaths);
-        assertTrue(config.envPaths.isEmpty());
+        com.proaut.claudeshim.Main.Config config = Main.parseConfig("https_proxy=http://x\n");
+        assertNotNull(config.pathMappings());
+        assertTrue(config.pathMappings().isEmpty());
     }
 
     @Test
@@ -56,7 +56,7 @@ class PathEnvironmentTest {
         Path cwd = Path.of("/work/customer-a").toAbsolutePath();
         Map<String, List<String>> mappings = Map.of("customer-a", List.of("/work/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertEquals("customer-a", result);
     }
@@ -66,7 +66,7 @@ class PathEnvironmentTest {
         Path cwd = Path.of("/work/customer-a/project/src").toAbsolutePath();
         Map<String, List<String>> mappings = Map.of("customer-a", List.of("/work/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertEquals("customer-a", result);
     }
@@ -78,7 +78,7 @@ class PathEnvironmentTest {
                 "customer-a", List.of("/work/customer-a"),
                 "customer-b", List.of("/work/customer-b"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertNull(result);
     }
@@ -88,7 +88,7 @@ class PathEnvironmentTest {
         Path cwd = Path.of("/work/customer-a2/sub").toAbsolutePath();
         Map<String, List<String>> mappings = Map.of("customer-a", List.of("/work/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertNull(result);
     }
@@ -100,7 +100,7 @@ class PathEnvironmentTest {
                 "shared", List.of("/work/shared"),
                 "customer-a", List.of("/work/shared/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertEquals("customer-a", result);
     }
@@ -115,7 +115,7 @@ class PathEnvironmentTest {
 
         Path cwd = Path.of("/work/project/sub/module/src").toAbsolutePath();
 
-        assertEquals("child", Main.findEnvironmentByPath(cwd, mappings));
+        assertEquals("child", PathMapper.findMatchingEnvironment(cwd, mappings));
     }
 
     @Test
@@ -127,7 +127,7 @@ class PathEnvironmentTest {
 
         Path cwd = Path.of("/work/a/b/c/d").toAbsolutePath();
 
-        assertEquals("level3", Main.findEnvironmentByPath(cwd, mappings));
+        assertEquals("level3", PathMapper.findMatchingEnvironment(cwd, mappings));
     }
 
     @Test
@@ -140,7 +140,7 @@ class PathEnvironmentTest {
 
         Path cwd = Path.of("/work/project/other").toAbsolutePath();
 
-        assertEquals("parent", Main.findEnvironmentByPath(cwd, mappings));
+        assertEquals("parent", PathMapper.findMatchingEnvironment(cwd, mappings));
     }
 
     @Test
@@ -149,19 +149,19 @@ class PathEnvironmentTest {
         Map<String, List<String>> mappings = Map.of(
                 "customer-a", List.of("/work/customer-a", "/srv/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertEquals("customer-a", result);
     }
 
     @Test
     void returnsNullForEmptyMappings() {
-        assertNull(Main.findEnvironmentByPath(Path.of("/work").toAbsolutePath(), Map.of()));
+        assertNull(PathMapper.findMatchingEnvironment(Path.of("/work").toAbsolutePath(), Map.of()));
     }
 
     @Test
     void returnsNullForNullCwd() {
-        assertNull(Main.findEnvironmentByPath(null, Map.of("a", List.of("/x"))));
+        assertNull(PathMapper.findMatchingEnvironment(null, Map.of("a", List.of("/x"))));
     }
 
     @Test
@@ -172,7 +172,7 @@ class PathEnvironmentTest {
         Path cwd = Path.of(home, "work", "customer-a").toAbsolutePath();
         Map<String, List<String>> mappings = Map.of("customer-a", List.of("~/work/customer-a"));
 
-        String result = Main.findEnvironmentByPath(cwd, mappings);
+        String result = PathMapper.findMatchingEnvironment(cwd, mappings);
 
         assertEquals("customer-a", result);
     }
@@ -193,7 +193,7 @@ class PathEnvironmentTest {
         Environment env = Main.resolveEnvironment(null, envsDir, mappings, cwd);
 
         assertNotNull(env);
-        assertEquals("customer-a", env.name);
+        assertEquals("customer-a", env.name());
     }
 
     @Test
@@ -212,7 +212,7 @@ class PathEnvironmentTest {
         Environment env = Main.resolveEnvironment("customer-b", envsDir, mappings, cwd);
 
         assertNotNull(env);
-        assertEquals("customer-b", env.name);
+        assertEquals("customer-b", env.name());
     }
 
     @Test
@@ -229,7 +229,7 @@ class PathEnvironmentTest {
         Environment env = Main.resolveEnvironment(null, envsDir, mappings, cwd);
 
         assertNotNull(env);
-        assertEquals("only", env.name);
+        assertEquals("only", env.name());
     }
 
     private static void assumeNotBlank(String s) {
