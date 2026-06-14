@@ -84,7 +84,7 @@ public final class BinaryLocator {
     }
 
     private static boolean isWindows(String osName) {
-        return StringUtils.containsIgnoreCase(osName, "windows");
+        return osName != null && osName.toLowerCase(java.util.Locale.ROOT).contains("windows");
     }
 
     /**

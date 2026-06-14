@@ -1,20 +1,13 @@
 package com.proaut.claudeshim;
 
 import org.apache.commons.lang3.StringUtils;
-import org.jline.terminal.Attributes;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
-import org.jline.utils.NonBlockingReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * Resolves which environment to use based on CLI flags, path mappings, and user input.
@@ -52,7 +45,7 @@ final class EnvResolver {
                 }
             }
             log.error("Environment '{}' not found. Available: {}", envName,
-                    environments.stream().map(e -> e.name()).toList());
+                    environments.stream().map(Environment::name).toList());
             System.exit(1);
             return null; // unreachable, but needed for compilation
         }
@@ -72,8 +65,8 @@ final class EnvResolver {
 
         // 3. Single environment
         if (environments.size() == 1) {
-            log.info("Only one environment found: {}. Using it.", environments.get(0).name());
-            return environments.get(0);
+            log.info("Only one environment found: {}. Using it.", environments.getFirst().name());
+            return environments.getFirst();
         }
 
         // 4. Interactive prompt
@@ -148,7 +141,7 @@ final class EnvResolver {
 
     private static Environment promptForEnvironment(List<Environment> environments) {
         try {
-            return InteractivePrompt.select("Select environment:", environments, e -> e.name());
+            return InteractivePrompt.select("Select environment:", environments, Environment::name);
         } catch (Exception e) {
             log.debug("Interactive prompt unavailable ({}), falling back to numeric input", e.getMessage());
             return promptForEnvironmentNumeric(environments);

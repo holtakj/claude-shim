@@ -45,7 +45,7 @@ public final class EnvironmentLoader {
             log.error("Error listing environments in {}: {}", envsDir, e.getMessage());
         }
 
-        result.sort(Comparator.comparing(e -> e.name()));
+        result.sort(Comparator.comparing(Environment::name));
         return result;
     }
 
