@@ -54,4 +54,10 @@ public class BinaryLocatorTest {
     void returnsNullWhenPathIsNull() {
         assertNull(BinaryLocator.findRealClaude(null, null));
     }
+
+    @Test
+    void returnsNullWhenNoBinaryExists() {
+        Path nonExistentDir = Path.of("/nonexistent/path/that/does/not/exist");
+        assertNull(BinaryLocator.findRealClaude(nonExistentDir.toString(), nonExistentDir));
+    }
 }

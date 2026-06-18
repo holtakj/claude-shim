@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MainConfigTest {
 
@@ -44,6 +45,24 @@ class MainConfigTest {
         assertNull(config.http_proxy());
         assertNull(config.no_proxy());
         assertNull(config.disable_telemetry());
+    }
+
+    @Test
+    void applyOverridesReturnsBaseWhenOverrideIsNull() {
+        Config base = new Config(
+                "http://base-proxy:8080",
+                "http://base-http:8080",
+                "localhost",
+                Boolean.TRUE,
+                new java.util.LinkedHashMap<>()
+        );
+
+        Config result = Main.applyOverrides(base, null);
+
+        assertEquals("http://base-proxy:8080", result.https_proxy());
+        assertEquals("http://base-http:8080", result.http_proxy());
+        assertEquals("localhost", result.no_proxy());
+        assertEquals(Boolean.TRUE, result.disable_telemetry());
     }
 
     @Test

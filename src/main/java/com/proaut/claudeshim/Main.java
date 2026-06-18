@@ -62,6 +62,10 @@ public class Main {
 
         // Locate the real Claude binary (skip the shim itself)
         String real = BinaryLocator.findRealClaude();
+        if (real == null) {
+            log.error("Claude Code binary not found on PATH. Is Claude Code installed?");
+            System.exit(1);
+        }
         log.info("Claude detected on path: {}", real);
 
         // Build the command to execute
@@ -128,7 +132,10 @@ public class Main {
 
     // ---- config helpers ----
 
-    private static Config applyOverrides(Config base, Config override) {
+    static Config applyOverrides(Config base, Config override) {
+        if (override == null) {
+            return base;
+        }
         return new Config(
                 override.https_proxy() != null ? override.https_proxy() : base.https_proxy(),
                 override.http_proxy() != null ? override.http_proxy() : base.http_proxy(),
