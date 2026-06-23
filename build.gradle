@@ -63,12 +63,12 @@ try {
 }
 if (buildBranch.isEmpty()) buildBranch = 'unknown'
 
-// Prefer git tag (semantic version) over the hardcoded version when available
+// Prefer git-derived version over the hardcoded fallback when available.
+// On a tagged commit: "v1.2.3"; after a tag: "v1.2.3-5-gabc1234"; with local changes: "...-dirty".
 def projectVersionVal = project.version.toString()
 try {
-    def tagOutput = 'git describe --tags --exact-match'.execute().text.trim()
-    // Accept only tags that look like semver (optionally prefixed with 'v')
-    if (tagOutput.matches(/^v?\d+\.\d+\.\d+(-.+)?$/)) {
+    def tagOutput = 'git describe --tags --dirty --always'.execute().text.trim()
+    if (!tagOutput.isEmpty()) {
         projectVersionVal = tagOutput
     }
 } catch (Exception ignored) {}
