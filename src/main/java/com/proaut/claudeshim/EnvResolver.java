@@ -140,7 +140,8 @@ final class EnvResolver {
 
     private static Environment promptForEnvironment(List<Environment> environments) {
         try {
-            return InteractivePrompt.select("Select environment:", environments, Environment::name);
+            return InteractivePrompt.select("Select environment:", environments, Environment::name,
+                    env -> ClaudeSettings.readThemeColor(env.config().theme()));
         } catch (Exception e) {
             log.debug("Interactive prompt unavailable ({}), falling back to numeric input", e.getMessage());
             return promptForEnvironmentNumeric(environments);

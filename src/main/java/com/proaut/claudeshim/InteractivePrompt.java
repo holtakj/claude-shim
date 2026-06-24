@@ -25,7 +25,7 @@ final class InteractivePrompt {
 
     private static final String HIDE_CURSOR = "\033[?25l";
     private static final String SHOW_CURSOR = "\033[?25h";
-    private static final String SELECTED_PREFIX = "\033[36m> \033[0m";
+    private static final String SELECTED_PREFIX_DEFAULT = "\033[36m> \033[0m";
     private static final String UNSELECTED_PREFIX = "  ";
     private static final String CLEAR_LINE = "\033[2K";
     private static final String CURSOR_UP = "\033[%dA";
@@ -60,6 +60,11 @@ final class InteractivePrompt {
      * @throws RuntimeException      if the user aborts (ESC, Ctrl+C, q)
      */
     static <T> T select(String title, List<T> items, Function<T, String> labelFn) throws Exception {
+        return select(title, items, labelFn, item -> null);
+    }
+
+    static <T> T select(String title, List<T> items, Function<T, String> labelFn,
+                        Function<T, String> colorFn) throws Exception {
         try (Terminal terminal = TerminalBuilder.builder().system(true).build()) {
             if (isDumbTerminal(terminal)) {
                 throw new IllegalStateException("dumb terminal");
@@ -75,7 +80,7 @@ final class InteractivePrompt {
             writer.print(HIDE_CURSOR);
             writer.print(title);
             writer.print("\r\n");
-            renderMenu(writer, items, labelFn, 0);
+            renderMenu(writer, items, labelFn, colorFn, 0);
             writer.flush();
 
             int selected = 0;
@@ -113,7 +118,7 @@ final class InteractivePrompt {
                         throw new IllegalStateException("eof");
                     }
                     // Otherwise: ignore unknown key
-                    redrawMenu(writer, items, labelFn, selected);
+                    redrawMenu(writer, items, labelFn, colorFn, selected);
                 }
             } finally {
                 writer.print(SHOW_CURSOR);
@@ -126,22 +131,28 @@ final class InteractivePrompt {
 
     // ---- rendering ----
 
-    private static <T> void renderMenu(PrintWriter w, List<T> items, Function<T, String> labelFn, int selected) {
+    private static <T> void renderMenu(PrintWriter w, List<T> items, Function<T, String> labelFn,
+                                       Function<T, String> colorFn, int selected) {
         for (int i = 0; i < items.size(); i++) {
-            String prefix = (i == selected) ? SELECTED_PREFIX : UNSELECTED_PREFIX;
+            String prefix = (i == selected) ? selectedPrefix(colorFn.apply(items.get(i))) : UNSELECTED_PREFIX;
             w.printf("%s%s\r\n", prefix, labelFn.apply(items.get(i)));
         }
     }
 
-    private static <T> void redrawMenu(PrintWriter w, List<T> items, Function<T, String> labelFn, int selected) {
-        // Move cursor back to the top of the menu, then redraw each line
+    private static <T> void redrawMenu(PrintWriter w, List<T> items, Function<T, String> labelFn,
+                                       Function<T, String> colorFn, int selected) {
         w.printf(CURSOR_UP, items.size());
         for (int i = 0; i < items.size(); i++) {
             w.print(CLEAR_LINE);
-            String prefix = (i == selected) ? SELECTED_PREFIX : UNSELECTED_PREFIX;
+            String prefix = (i == selected) ? selectedPrefix(colorFn.apply(items.get(i))) : UNSELECTED_PREFIX;
             w.printf("%s%s\r\n", prefix, labelFn.apply(items.get(i)));
         }
         w.flush();
+    }
+
+    private static String selectedPrefix(String hexColor) {
+        String ansi = hexColor != null ? Banner.ansiCode(hexColor) : "\033[36m";
+        return ansi + "> \033[0m";
     }
 
     private static void clearMenu(PrintWriter w, int menuLines) {
