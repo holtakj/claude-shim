@@ -28,6 +28,9 @@ Features:
 - PATH shadowing (no renaming required)
 - HTTP / HTTPS proxy support
 - Optional telemetry disabling
+- Per-environment Claude theme switching (banner color + TUI colors)
+- Colored startup banner with environment name
+- Colored interactive environment selection
 - GraalVM native binary support
 - Automatic GraalVM JDK 25 provisioning for native builds
 
@@ -177,6 +180,7 @@ Supported keys:
 - `no_proxy`
 - `disable_telemetry`
 - `paths.<env-name>` — comma-separated list of directories that should auto-select `<env-name>` (see [Per-directory environments](#per-directory-environments))
+- `theme` — default Claude Code theme applied when no environment is active (e.g. `dark`, `light`, `custom:<name>`)
 
 ### Environment properties files
 
@@ -190,6 +194,59 @@ env.SOME_OTHER_VAR=value
 ```
 
 Keys without the `env.` prefix override the global config for that session. Keys with `env.` are set as environment variables on the forwarded `claude` process.
+
+## Themes
+
+The shim supports per-environment Claude Code themes. When an environment is active, the shim patches `~/.claude/settings.json` with the configured theme before launching Claude. If no theme is configured, the `theme` key is removed from `settings.json` entirely so Claude uses its own default.
+
+### Creating a theme
+
+Claude Code loads custom themes from `~/.claude/themes/<name>.json`. The `base` field selects a built-in theme to inherit from, and `overrides` maps color token names to hex values.
+
+Example `~/.claude/themes/acme.json`:
+
+```json
+{
+  "name": "acme",
+  "base": "dark",
+  "overrides": {
+    "claude": "#0066cc",
+    "claudeShimmer": "#3388dd",
+    "promptBorder": "#0066cc",
+    "promptBorderShimmer": "#3388dd",
+    "planMode": "#0066cc",
+    "autoAccept": "#004499",
+    "permission": "#0066cc",
+    "permissionShimmer": "#3388dd",
+    "remember": "#0066cc",
+    "success": "#0066cc",
+    "rate_limit_fill": "#0066cc"
+  }
+}
+```
+
+The `overrides.claude` value doubles as the banner color — the shim reads it automatically, so no separate `color=` property is needed.
+
+### Linking a theme to an environment
+
+Add `theme=custom:<name>` to the environment's `.properties` file:
+
+```properties
+# ~/.config/claude-shim/envs/acme.properties
+theme=custom:acme
+env.ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Default theme
+
+Set `theme=` in the global `config.properties` to apply a theme when no environment is active:
+
+```properties
+# ~/.config/claude-shim/config.properties
+theme=dark
+```
+
+If omitted, the `theme` key is stripped from `settings.json` on each launch, letting Claude Code use whatever theme was last set interactively.
 
 ## Troubleshooting
 
