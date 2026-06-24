@@ -54,7 +54,8 @@ class MainConfigTest {
                 "http://base-http:8080",
                 "localhost",
                 Boolean.TRUE,
-                new java.util.LinkedHashMap<>()
+                new java.util.LinkedHashMap<>(),
+                null
         );
 
         Config result = Main.applyOverrides(base, null);
