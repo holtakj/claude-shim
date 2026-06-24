@@ -13,7 +13,7 @@ public final class Banner {
 
     public static void print(String envName, String color, String version) {
         String label = "claude-shim"
-                + (version != null ? version : "")
+                + (version != null ? " " + version : "")
                 + "  ▶  "
                 + envName.toUpperCase();
 
