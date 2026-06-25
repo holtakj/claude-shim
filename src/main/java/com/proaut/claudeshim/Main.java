@@ -109,6 +109,14 @@ public class Main {
             ClaudeSettings.removeTheme();
         }
 
+        // Set the status line environment variable so Claude's status line script can read it
+        if (selectedEnv != null) {
+            StatusLine.apply(selectedEnv.name().toUpperCase());
+            env.put(StatusLine.getEnvVarName(), selectedEnv.name().toUpperCase());
+        } else {
+            StatusLine.remove();
+        }
+
         pb.inheritIO();
         Process p = pb.start();
         System.exit(p.waitFor());
