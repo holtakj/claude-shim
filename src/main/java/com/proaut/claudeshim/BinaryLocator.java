@@ -1,6 +1,8 @@
 package com.proaut.claudeshim;
 
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,16 +18,22 @@ import java.util.List;
  */
 public final class BinaryLocator {
 
+    private static final Logger log = LoggerFactory.getLogger(BinaryLocator.class);
+
     private BinaryLocator() {}
 
     /**
      * Locate the real Claude binary on PATH.
      */
     public static String findRealClaude() {
-        return findRealClaude(
+        Path currentCommandPath = currentCommandPath();
+        log.info("Claude-Shim command path: {}", currentCommandPath);
+        String realClaudePath = findRealClaude(
                 System.getenv("PATH"),
-                currentCommandPath(),
+                currentCommandPath,
                 System.getProperty("os.name", ""));
+        log.info("Real Claude binary path: {}", realClaudePath);
+        return realClaudePath;
     }
 
     /**
@@ -41,7 +49,13 @@ public final class BinaryLocator {
         }
 
         Path normalizedSelfPath = normalize(selfPath);
+        log.info("Normalized self path: {}", normalizedSelfPath);
+
         boolean windows = isWindows(osName);
+
+        if (windows) {
+            log.info("Running on Windows, will look for .exe, .cmd, .bat, .com extensions");
+        }
 
         for (String dir : path.split(File.pathSeparator)) {
             String trimmedDir = StringUtils.trim(dir);

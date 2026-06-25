@@ -17,16 +17,19 @@ import java.util.Map;
  */
 public class Main {
 
+    // Configure slf4j-simple before the logger is created (static fields init before main())
+    static {
+        System.setProperty("org.slf4j.simpleLogger.defaultFormat", "%message");
+        System.setProperty("org.slf4j.simpleLogger.showDateTime", "false");
+        System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+        System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
+        System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Main.class);
     private static final String MASKED = "*****";
 
     public static void main(String[] args) throws Exception {
-
-        // Configure slf4j-simple output format
-        System.setProperty("org.slf4j.simpleLogger.showDateTime", "true");
-        System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-        System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
-        System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
 
         // Parse CLI arguments (--env, --version, --v)
         CliArgs cliArgs = CliArgs.from(args);
@@ -57,8 +60,6 @@ public class Main {
         // Apply environment-level overrides to global config
         if (selectedEnv != null) {
             cfg = applyOverrides(cfg, selectedEnv.config());
-            String bannerColor = ClaudeSettings.readThemeColor(cfg.theme());
-            Banner.print(selectedEnv.name(), bannerColor, info != null ? info.version() : null);
         }
 
         // Locate the real Claude binary (skip the shim itself)
@@ -107,6 +108,12 @@ public class Main {
             ClaudeSettings.applyTheme(cfg.theme());
         } else {
             ClaudeSettings.removeTheme();
+        }
+
+        // Print banner last, right before launching Claude
+        if (selectedEnv != null) {
+            String bannerColor = ClaudeSettings.readThemeColor(cfg.theme());
+            Banner.print(selectedEnv.name(), bannerColor, info != null ? info.version() : null);
         }
 
         pb.inheritIO();
