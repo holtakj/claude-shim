@@ -57,7 +57,9 @@ def buildInfoOutput = file('build/generated-resources/build-info.properties')
 def buildDate = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX"))
 def buildBranch
 try {
-    buildBranch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+    buildBranch = providers.exec {
+        commandLine('git', 'rev-parse', '--abbrev-ref', 'HEAD')
+    }.standardOutput.asText.get().trim()
 } catch (Exception e) {
     buildBranch = 'unknown'
 }
@@ -67,7 +69,9 @@ if (buildBranch.isEmpty()) buildBranch = 'unknown'
 // On a tagged commit: "v1.2.3"; after a tag: "v1.2.3-5-gabc1234"; with local changes: "...-dirty".
 def projectVersionVal = project.version.toString()
 try {
-    def tagOutput = 'git describe --tags --dirty --always'.execute().text.trim()
+    def tagOutput = providers.exec {
+        commandLine('git', 'describe', '--tags', '--dirty', '--always')
+    }.standardOutput.asText.get().trim()
     if (!tagOutput.isEmpty()) {
         projectVersionVal = tagOutput
     }
@@ -79,6 +83,8 @@ def generatedSrc = file('build/generated-sources/java')
 // Write a Java source file with constants baked in (works in native image)
 def writeBuildInfoSrc = tasks.register('writeBuildInfoSrc') {
     description = 'Writes BuildInfoConstants.java with version/date/branch'
+    inputs.property('version', projectVersionVal)
+    inputs.property('branch', buildBranch)
     outputs.file(new File(generatedSrc, 'com/proaut/claudeshim/BuildInfoConstants.java'))
     doLast {
         generatedSrc.mkdirs()
@@ -101,6 +107,8 @@ final class BuildInfoConstants {
 // Write build-info.properties for classpath-based runs (dev/Uberjar)
 def writeBuildInfo = tasks.register('writeBuildInfo') {
     description = 'Writes build-info.properties with date, branch and version'
+    inputs.property('version', projectVersionVal)
+    inputs.property('branch', buildBranch)
     outputs.file(buildInfoOutput)
     dependsOn(writeBuildInfoSrc)
     doLast {

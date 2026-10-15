@@ -107,8 +107,7 @@ public final class BinaryLocator {
     private static Path currentCommandPath() {
         return ProcessHandle.current()
                 .info()
-                .commandLine()
-                .map(cmdLine -> cmdLine.split("\\s+")[0])
+                .command()
                 .map(Paths::get)
                 .orElse(null);
     }
