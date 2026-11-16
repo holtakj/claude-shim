@@ -106,6 +106,26 @@ final class ConfigParser {
         return extra;
     }
 
+    // ---- auth parsing ----
+
+    /**
+     * Parse the {@code auth} key. Missing/blank means {@link AuthMode#API_KEY}.
+     *
+     * @throws IllegalArgumentException for unknown values
+     */
+    static AuthMode parseAuthMode(Map<String, String> props) {
+        return AuthMode.parse(lookup(props, "auth"));
+    }
+
+    /**
+     * Parse the optional {@code config_dir} key (supports leading {@code ~}).
+     * Returns null if absent or invalid.
+     */
+    static java.nio.file.Path parseConfigDir(Map<String, String> props) {
+        String raw = lookup(props, "config_dir");
+        return raw == null ? null : EnvResolver.expandAndNormalize(raw);
+    }
+
     // ---- path mapping parsing ----
 
     /**

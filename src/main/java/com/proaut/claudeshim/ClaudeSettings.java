@@ -21,20 +21,36 @@ final class ClaudeSettings {
 
     private ClaudeSettings() {}
 
+    static Path defaultClaudeDir() {
+        return Path.of(System.getProperty("user.home", ""), ".claude");
+    }
+
     static Path globalSettingsPath() {
-        return Path.of(System.getProperty("user.home", ""), ".claude", "settings.json");
+        return settingsPath(defaultClaudeDir());
+    }
+
+    static Path settingsPath(Path claudeDir) {
+        return claudeDir.resolve("settings.json");
     }
 
     static void applyTheme(String theme) {
-        patch(json -> setTheme(json, theme), "Applied theme '" + theme + "'");
+        applyTheme(defaultClaudeDir(), theme);
+    }
+
+    static void applyTheme(Path claudeDir, String theme) {
+        patch(claudeDir, json -> setTheme(json, theme), "Applied theme '" + theme + "'");
     }
 
     static void removeTheme() {
-        patch(ClaudeSettings::stripTheme, "Removed theme from settings");
+        removeTheme(defaultClaudeDir());
     }
 
-    private static void patch(java.util.function.UnaryOperator<String> transform, String logMsg) {
-        Path global = globalSettingsPath();
+    static void removeTheme(Path claudeDir) {
+        patch(claudeDir, ClaudeSettings::stripTheme, "Removed theme from settings");
+    }
+
+    private static void patch(Path claudeDir, java.util.function.UnaryOperator<String> transform, String logMsg) {
+        Path global = settingsPath(claudeDir);
         if (!Files.exists(global)) return;
         try {
             Files.writeString(global, transform.apply(Files.readString(global)));
@@ -58,9 +74,13 @@ final class ClaudeSettings {
      * theme must be in "custom:name" format; returns null for built-in themes or missing files.
      */
     static String readThemeColor(String theme) {
+        return readThemeColor(defaultClaudeDir(), theme);
+    }
+
+    static String readThemeColor(Path claudeDir, String theme) {
         if (theme == null || !theme.startsWith("custom:")) return null;
         String name = theme.substring("custom:".length());
-        Path themeFile = Path.of(System.getProperty("user.home", ""), ".claude", "themes", name + ".json");
+        Path themeFile = claudeDir.resolve("themes").resolve(name + ".json");
         if (!Files.exists(themeFile)) return null;
         try {
             Matcher m = Pattern.compile("\"claude\"\\s*:\\s*\"(#[0-9a-fA-F]{6})\"")

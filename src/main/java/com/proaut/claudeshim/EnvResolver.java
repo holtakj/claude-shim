@@ -140,18 +140,22 @@ final class EnvResolver {
 
     private static Environment promptForEnvironment(List<Environment> environments) {
         try {
-            return InteractivePrompt.select("Select environment:", environments, Environment::name,
-                    env -> ClaudeSettings.readThemeColor(env.config().theme()));
+            return InteractivePrompt.select("Select environment:", environments, EnvResolver::menuLabel,
+                    env -> ClaudeSettings.readThemeColor(env.claudeDir(), env.config().theme()));
         } catch (Exception e) {
             log.debug("Interactive prompt unavailable ({}), falling back to numeric input", e.getMessage());
             return promptForEnvironmentNumeric(environments);
         }
     }
 
+    static String menuLabel(Environment env) {
+        return env.auth() == AuthMode.LOGIN ? env.name() + " (login)" : env.name();
+    }
+
     private static Environment promptForEnvironmentNumeric(List<Environment> environments) {
         System.err.println("Select environment:");
         for (int i = 0; i < environments.size(); i++) {
-            System.err.printf("  [%d] %s%n", i + 1, environments.get(i).name());
+            System.err.printf("  [%d] %s%n", i + 1, menuLabel(environments.get(i)));
         }
         System.err.print("Choice: ");
         System.err.flush();

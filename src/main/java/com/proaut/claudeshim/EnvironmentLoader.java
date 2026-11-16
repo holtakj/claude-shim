@@ -57,11 +57,22 @@ public final class EnvironmentLoader {
             Map<String, String> props = ConfigParser.parseContent(readFile(file));
             Config config = ConfigParser.parseGlobalConfig(props);
             Map<String, String> extraEnvVars = ConfigParser.parseExtraEnvVars(props);
-            return new Environment(name, config, extraEnvVars);
+            AuthMode auth = ConfigParser.parseAuthMode(props);
+            Path configDir = ConfigParser.parseConfigDir(props);
+            if (configDir == null && auth == AuthMode.LOGIN) {
+                configDir = defaultProfileDir(file, name);
+            }
+            return new Environment(name, config, extraEnvVars, auth, configDir);
         } catch (Exception e) {
             log.error("Error loading environment '{}' from {}: {}", name, file, e.getMessage());
             return null;
         }
+    }
+
+    /** {@code <config root>/profiles/<name>}, where the config root is the parent of the envs directory. */
+    static Path defaultProfileDir(Path envFile, String name) {
+        Path envsDir = envFile.toAbsolutePath().getParent();
+        return envsDir.getParent().resolve("profiles").resolve(name);
     }
 
     private static String readFile(Path path) throws IOException {

@@ -12,10 +12,11 @@ public final class Banner {
     private Banner() {}
 
     public static void print(String envName, String color, String version) {
-        String label = "claude-shim"
-                + (version != null ? " " + version : "")
-                + "  ▶  "
-                + envName.toUpperCase();
+        print(envName, AuthMode.API_KEY, color, version);
+    }
+
+    public static void print(String envName, AuthMode auth, String color, String version) {
+        String label = label(envName, auth, version);
 
         int width = Math.max(label.length() + 6, 42);
         String bar = "━".repeat(width);
@@ -32,6 +33,14 @@ public final class Banner {
             System.err.println(line);
             System.err.println(bar);
         }
+    }
+
+    static String label(String envName, AuthMode auth, String version) {
+        return "claude-shim"
+                + (version != null ? " " + version : "")
+                + "  ▶  "
+                + envName.toUpperCase()
+                + (auth != null ? " [" + auth.label() + "]" : "");
     }
 
     private static String center(String s, int width) {

@@ -168,7 +168,7 @@ graalvmNative {
             imageName = "claude"
             javaLauncher = javaToolchains.launcherFor { spec ->
                 spec.languageVersion = JavaLanguageVersion.of(25)
-                spec.vendor = JvmVendorSpec.GRAAL_VM
+                spec.vendor = JvmVendorSpec.ORACLE
             }
             buildArgs.add('--enable-url-protocols=https')
             metadataRepository {

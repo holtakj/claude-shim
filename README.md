@@ -117,6 +117,23 @@ Example `~/.config/claude-shim/envs/customer-b.properties`:
 env.ANTHROPIC_API_KEY=sk-ant-api-key-for-customer-b
 ```
 
+### Login with a personal claude.ai account
+
+Instead of an API key, an environment can use `claude login`:
+
+```properties
+# ~/.config/claude-shim/envs/privat.properties
+auth=login
+# optional, default: <config root>/profiles/<env-name>
+# config_dir=~/.config/claude-shim/profiles/privat
+```
+
+- Each login environment gets its own Claude config dir (`CLAUDE_CONFIG_DIR`), so its login is isolated from `~/.claude` and from other environments. API-key environments keep working in parallel.
+- On first start, run `/login` inside Claude. The login is kept afterwards.
+- In login mode the shim removes inherited `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CODE_USE_VERTEX` (they would override the login) and ignores them in `env.*`.
+- Settings, skills and plugins in `~/.claude` are not shared with the profile.
+- The banner and the selection menu show whether an environment uses `login` or `api-key`.
+
 Use the `env.` prefix to set arbitrary environment variables. The standard config keys (`https_proxy`, `http_proxy`, `no_proxy`, `disable_telemetry`) work without a prefix and override the global config.
 
 ### Usage

@@ -80,10 +80,7 @@ public class Main {
         Map<String, String> env = pb.environment();
 
         if (selectedEnv != null) {
-            for (Map.Entry<String, String> entry : selectedEnv.extraEnvVars().entrySet()) {
-                log.info("Setting env var from environment '{}': {}={}", selectedEnv.name(), entry.getKey(), maskCredentials(entry.getValue()));
-                env.put(entry.getKey(), entry.getValue());
-            }
+            applyEnvironment(selectedEnv, env);
         }
 
         if (cfg.https_proxy() != null) {
@@ -104,21 +101,70 @@ public class Main {
             env.put("CLAUDE_DISABLE_TELEMETRY", "1");
         }
 
+        Path claudeDir = selectedEnv != null ? selectedEnv.claudeDir() : ClaudeSettings.defaultClaudeDir();
         if (cfg.theme() != null) {
-            ClaudeSettings.applyTheme(cfg.theme());
+            ClaudeSettings.applyTheme(claudeDir, cfg.theme());
         } else {
-            ClaudeSettings.removeTheme();
+            ClaudeSettings.removeTheme(claudeDir);
         }
 
         // Print banner last, right before launching Claude
         if (selectedEnv != null) {
-            String bannerColor = ClaudeSettings.readThemeColor(cfg.theme());
-            Banner.print(selectedEnv.name(), bannerColor, info != null ? info.version() : null);
+            String bannerColor = ClaudeSettings.readThemeColor(claudeDir, cfg.theme());
+            Banner.print(selectedEnv.name(), selectedEnv.auth(), bannerColor, info != null ? info.version() : null);
         }
 
         pb.inheritIO();
         Process p = pb.start();
         System.exit(p.waitFor());
+    }
+
+    /** Variables that would override a claude.ai login; removed in {@link AuthMode#LOGIN} mode. */
+    static final List<String> AUTH_OVERRIDE_VARS = List.of(
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "CLAUDE_CODE_USE_BEDROCK",
+            "CLAUDE_CODE_USE_VERTEX");
+
+    /**
+     * Applies the environment's auth mode, config dir and extra variables to the child process environment.
+     *
+     * <p>In login mode, inherited API-key style variables are removed (they would silently win over
+     * the login) and {@code CLAUDE_CONFIG_DIR} points to the environment's own profile directory,
+     * so each environment keeps its own login.</p>
+     */
+    static void applyEnvironment(Environment selectedEnv, Map<String, String> env) {
+        boolean login = selectedEnv.auth() == AuthMode.LOGIN;
+
+        if (login) {
+            for (String name : AUTH_OVERRIDE_VARS) {
+                if (env.remove(name) != null) {
+                    log.info("Login mode: removed inherited {}", name);
+                }
+            }
+        }
+
+        if (selectedEnv.configDir() != null) {
+            try {
+                Files.createDirectories(selectedEnv.configDir());
+            } catch (java.io.IOException e) {
+                log.error("Could not create config dir {}: {}", selectedEnv.configDir(), e.getMessage());
+                System.exit(1);
+            }
+            log.info("Using CLAUDE_CONFIG_DIR: {}", selectedEnv.configDir());
+            env.put("CLAUDE_CONFIG_DIR", selectedEnv.configDir().toString());
+        }
+
+        for (Map.Entry<String, String> entry : selectedEnv.extraEnvVars().entrySet()) {
+            if (login && AUTH_OVERRIDE_VARS.contains(entry.getKey())) {
+                log.warn("Environment '{}' uses auth=login: ignoring {}", selectedEnv.name(), entry.getKey());
+                continue;
+            }
+            log.info("Setting env var from environment '{}': {}={}", selectedEnv.name(), entry.getKey(), maskCredentials(entry.getValue()));
+            env.put(entry.getKey(), entry.getValue());
+        }
     }
 
     /**
